@@ -1,60 +1,64 @@
-// backend/server.js
-import express from 'express';
-import cors from 'cors';
-import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+// backend/server.js (ESM)
+import express from "express";
+import cors from "cors";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// Import routes
-import authRoutes from './routes/auth.js';
-import mangaRoutes from './routes/manga.js';
-import chapterRoutes from './routes/chapters.js';
-import userRoutes from './routes/users.js';
-import adminRoutes from './routes/admin.js';
+import mangaRoutes from "./routes/manga.js";
+import chaptersRoutes from "./routes/chapters.js";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Resolve __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ---------- Middleware (MUST come first!) ----------
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'], // Add your frontend URL
   credentials: true
 }));
-
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch((error) => console.error('❌ MongoDB connection error:', error));
+// ---------- Static files ----------
+// If you chose uploads/ as your static root:
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/manga', mangaRoutes);
-app.use('/api/chapters', chapterRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/admin', adminRoutes);
+// If you kept your files in backend/manga/, keep this too:
+app.use("/manga", express.static(path.join(__dirname, "manga")));
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Server is running!' });
+// ---------- API routes (AFTER middleware!) ----------
+app.use("/api/manga", mangaRoutes);
+app.use("/api/chapters", chaptersRoutes);
+
+// ---------- Basic health check route ----------
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'Server is running', timestamp: new Date().toISOString() });
 });
 
-// Error handling
-app.use((error, req, res, next) => {
-  console.error(error);
-  res.status(500).json({ message: 'Something went wrong!' });
-});
+// ---------- DB ----------
+const MONGO_URI =
+  process.env.MONGODB_URI ||
+  process.env.MONGO_URI ||
+  "mongodb://127.0.0.1:27017/coxico";
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
+mongoose
+  .connect(MONGO_URI, { serverSelectionTimeoutMS: 10000 })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err.message);
+    process.exit(1);
+  });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+// ---------- Server ----------
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, "127.0.0.1", () => {
+  console.log(`🚀 API running at http://127.0.0.1:${PORT}`);
+  console.log(`📊 Health check: http://127.0.0.1:${PORT}/api/health`);
+  console.log(`📚 Manga API: http://127.0.0.1:${PORT}/api/manga`);
 });
-
-export default app;

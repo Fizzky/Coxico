@@ -1,6 +1,8 @@
 {
   "name": "manga-reader-backend",
   "version": "1.0.0",
+  "description": "Backend server for the manga reader app",
+  "main": "server.js",
   "type": "module",
   "scripts": {
     "dev": "nodemon server.js",
@@ -19,5 +21,9 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
-  }
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
 }
