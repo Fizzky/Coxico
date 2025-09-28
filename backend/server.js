@@ -1,21 +1,24 @@
-// backend/server.js (ESM)
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+// Resolve __dirname in ESM first
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env with explicit path
+dotenv.config({ path: path.join(__dirname, '.env') });
+
+// NOW import other modules
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-
 import mangaRoutes from "./routes/manga.js";
 import chaptersRoutes from "./routes/chapters.js";
-
-dotenv.config();
+import authRoutes from "./routes/auth.js";
+import adminRoutes from './routes/admin.js';
 
 const app = express();
-
-// Resolve __dirname in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // ---------- Middleware (MUST come first!) ----------
 app.use(cors({
@@ -35,6 +38,8 @@ app.use("/manga", express.static(path.join(__dirname, "manga")));
 // ---------- API routes (AFTER middleware!) ----------
 app.use("/api/manga", mangaRoutes);
 app.use("/api/chapters", chaptersRoutes);
+app.use("/api/auth", authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ---------- Basic health check route ----------
 app.get('/api/health', (req, res) => {

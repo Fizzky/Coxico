@@ -1,15 +1,36 @@
 // frontend/src/App.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   BookOpen, Search, Menu, X, User, Eye, Star, ArrowLeft, ArrowRight,
-  ChevronLeft, ChevronRight, LogIn, UserPlus, Heart, History, LogOut, SlidersHorizontal
+  ChevronLeft, ChevronRight, LogIn, UserPlus, Heart, History, LogOut, SlidersHorizontal,
+  TrendingUp, Crown  // Add these two missing imports
 } from 'lucide-react';
 import axios from 'axios';
 import './App.css';
 import AdminApp from './AdminPanel.jsx'; // kept import as before
 import { AuthProvider, useAuth } from './components/AuthContext';
 import './styles/netflix-theme.css';
+import AdminUpload from './AdminUpload.jsx';
+import AdminWithAuth from './AdminPanel.jsx';
+
+axios.defaults.baseURL = 'http://localhost:5000';
+
+// ---------------------- Protected Route Component ----------------------
+const AdminRoute = ({ children }) => {
+  const { user, isAuthenticated } = useAuth();
+  
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+};
+
 
 // ---------------------- Header (sliding search + live results + "Did you mean") ----------------------
 const Header = () => {
@@ -32,6 +53,9 @@ const Header = () => {
 
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  // Check if user is admin
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 0);
@@ -196,6 +220,13 @@ const Header = () => {
           <Link to="/popular" className="nav-link">Popular</Link>
           <Link to="/latest" className="nav-link">New Releases</Link>
           {isAuthenticated() && <Link to="/favorites" className="nav-link">My List</Link>}
+          
+          {/* Admin Upload Link - Only visible to admins */}
+          {isAdmin && (
+            <Link to="/admin/upload" className="nav-link text-[#e50914] font-semibold">
+              Admin Upload
+            </Link>
+          )}
         </nav>
 
         {/* Right: Search + Auth */}
@@ -270,6 +301,11 @@ const Header = () => {
             <Link to="/browse" className="block text-gray-200 py-2" onClick={() => setIsMenuOpen(false)}>Browse</Link>
             <Link to="/popular" className="block text-gray-200 py-2" onClick={() => setIsMenuOpen(false)}>Popular</Link>
             <Link to="/latest" className="block text-gray-200 py-2" onClick={() => setIsMenuOpen(false)}>New Releases</Link>
+            {isAdmin && (
+              <Link to="/admin/upload" className="block text-[#e50914] font-semibold py-2" onClick={() => setIsMenuOpen(false)}>
+                Admin Upload
+              </Link>
+            )}
             <AuthMenuMobile setIsMenuOpen={setIsMenuOpen} />
           </div>
         </div>
@@ -323,7 +359,7 @@ const Header = () => {
                   </div>
                 ) : (
                   <div className="search-empty">
-                    No matches for “{searchTerm}”.
+                    No matches for "{searchTerm}".
                     {didYouMean ? (
                       <>
                         {' '}Did you mean{' '}
@@ -703,6 +739,9 @@ const MangaDetailPage = () => {
         const response = await axios.get(`/api/manga/${id}`);
         setManga(response.data.manga);
         setChapters(response.data.chapters || []);
+
+        console.log('Manga object:', response.data.manga);
+        
       } catch (error) {
         console.error('Error fetching manga detail:', error);
       } finally {
@@ -774,15 +813,21 @@ const MangaDetailPage = () => {
           </div>
 
           <div className="billboard-buttons">
-            {firstChapter && (
-              <Link to={`/read/${manga._id}/chapter/${firstChapter.chapterNumber}`} className="btn btn-play">
-                ▶ Read Chapter {firstChapter.chapterNumber}
-              </Link>
-            )}
-            <button onClick={handleFavorite} className="btn btn-info" disabled={favLoading}>
-              {favLoading ? 'Saving…' : (isAuthenticated() && isFavorite(manga._id) ? '♥ In My List' : '+ My List')}
-            </button>
-          </div>
+  {firstChapter && (
+    <Link to={`/read/${manga._id}/chapter/${firstChapter.chapterNumber}`} className="btn btn-play">
+      ▶ Read Chapter {firstChapter.chapterNumber}
+    </Link>
+  )}
+  <button onClick={handleFavorite} className="btn btn-info" disabled={favLoading}>
+  {favLoading ? (
+    'Saving…'
+  ) : isAuthenticated() ? (
+    isFavorite(manga._id) ? '♥ Remove from Favourites' : '+ Add to Favourites'
+  ) : (
+    '+ Add to Favourites'
+  )}
+</button>
+</div>
         </div>
       </section>
 
@@ -904,15 +949,27 @@ const MangaDetailPage = () => {
 const ChapterReaderPage = () => {
   const { mangaId, chapterNumber } = useParams();
   const navigate = useNavigate();
+  const { isAuthenticated, updateReadingProgress } = useAuth();
   const [data, setData] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [startTime, setStartTime] = useState(Date.now());
+  const [lastProgressUpdate, setLastProgressUpdate] = useState(0);
 
   useEffect(() => {
     const fetchChapter = async () => {
       try {
         const response = await axios.get(`/api/chapters/manga/${mangaId}/chapter/${chapterNumber}`);
         setData(response.data);
+        
+        // Check if we should go to last page
+        const shouldGoToLastPage = sessionStorage.getItem('goToLastPage') === 'true';
+        if (shouldGoToLastPage) {
+          sessionStorage.removeItem('goToLastPage');
+          setCurrentPage(response.data.chapter.pages.length - 1);
+        } else {
+          setCurrentPage(0);
+        }
       } catch (error) {
         console.error('Error fetching chapter:', error);
       } finally {
@@ -921,44 +978,143 @@ const ChapterReaderPage = () => {
     };
 
     fetchChapter();
+    setStartTime(Date.now()); // Reset reading timer
   }, [mangaId, chapterNumber]);
+
+  // Auto-save reading progress every 30 seconds or when page changes significantly
+  useEffect(() => {
+    if (!data || !isAuthenticated()) return;
+
+    const saveProgress = async () => {
+      const now = Date.now();
+      const readingTime = Math.floor((now - startTime) / 1000); // Convert to seconds
+      
+      // Only save if user has been reading for at least 5 seconds
+      if (readingTime >= 5 && currentPage !== lastProgressUpdate) {
+        await updateReadingProgress(
+          mangaId,
+          data.chapter._id,
+          data.chapter.chapterNumber,
+          currentPage,
+          data.chapter.pages.length,
+          Math.floor((now - startTime) / 1000)
+        );
+        setLastProgressUpdate(currentPage);
+        setStartTime(now); // Reset timer
+      }
+    };
+
+    // Save immediately when page changes significantly (every 5 pages or at boundaries)
+    if (currentPage % 5 === 0 || currentPage === 0 || currentPage === data.chapter.pages.length - 1) {
+      const timer = setTimeout(saveProgress, 1000);
+      return () => clearTimeout(timer);
+    }
+
+    // Auto-save every 30 seconds
+    const interval = setInterval(saveProgress, 30000);
+    return () => clearInterval(interval);
+  }, [data, currentPage, isAuthenticated, mangaId, updateReadingProgress, startTime, lastProgressUpdate]);
+
+  // Save progress on component unmount
+  useEffect(() => {
+    return () => {
+      if (data && isAuthenticated() && currentPage !== lastProgressUpdate) {
+        const readingTime = Math.floor((Date.now() - startTime) / 1000);
+        if (readingTime >= 5) {
+          updateReadingProgress(
+            mangaId,
+            data.chapter._id,
+            data.chapter.chapterNumber,
+            currentPage,
+            data.chapter.pages.length,
+            readingTime
+          );
+        }
+      }
+    };
+  }, [data, currentPage, isAuthenticated, mangaId, updateReadingProgress, startTime, lastProgressUpdate]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevPage();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        nextPage();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [currentPage, data]);
 
   const nextPage = () => {
     if (data && currentPage < data.chapter.pages.length - 1) {
       setCurrentPage(currentPage + 1);
+    } else if (data && currentPage === data.chapter.pages.length - 1) {
+      // Save progress before moving to next chapter
+      if (isAuthenticated()) {
+        updateReadingProgress(
+          mangaId,
+          data.chapter._id,
+          data.chapter.chapterNumber,
+          currentPage,
+          data.chapter.pages.length,
+          Math.floor((Date.now() - startTime) / 1000)
+        );
+      }
+      nextChapter();
     }
   };
 
   const prevPage = () => {
     if (currentPage > 0) {
       setCurrentPage(currentPage - 1);
+    } else if (currentPage === 0) {
+      prevChapterToLastPage();
     }
   };
 
-const nextChapter = () => {
-  if (data) {
-    const currentIndex = data.allChapters.findIndex(
-      ch => ch.chapterNumber === parseInt(chapterNumber)
-    );
-    if (currentIndex < data.allChapters.length - 1) {
-      const nextCh = data.allChapters[currentIndex + 1];
-      navigate(`/read/${mangaId}/chapter/${nextCh.chapterNumber}`);
+  const nextChapter = () => {
+    if (data) {
+      const currentIndex = data.allChapters.findIndex(
+        ch => ch.chapterNumber === parseInt(chapterNumber)
+      );
+      if (currentIndex < data.allChapters.length - 1) {
+        const nextCh = data.allChapters[currentIndex + 1];
+        setCurrentPage(0);
+        navigate(`/read/${mangaId}/chapter/${nextCh.chapterNumber}`);
+      }
     }
-  }
-};
+  };
 
-const prevChapter = () => {
-  if (data) {
-    const currentIndex = data.allChapters.findIndex(
-      ch => ch.chapterNumber === parseInt(chapterNumber)
-    );
-    if (currentIndex > 0) {
-      const prevCh = data.allChapters[currentIndex - 1];
-      navigate(`/read/${mangaId}/chapter/${prevCh.chapterNumber}`);
+  const prevChapterToLastPage = () => {
+    if (data) {
+      const currentIndex = data.allChapters.findIndex(
+        ch => ch.chapterNumber === parseInt(chapterNumber)
+      );
+      if (currentIndex > 0) {
+        const prevCh = data.allChapters[currentIndex - 1];
+        sessionStorage.setItem('goToLastPage', 'true');
+        navigate(`/read/${mangaId}/chapter/${prevCh.chapterNumber}`);
+      }
     }
-  }
-};
+  };
 
+  const prevChapter = () => {
+    if (data) {
+      const currentIndex = data.allChapters.findIndex(
+        ch => ch.chapterNumber === parseInt(chapterNumber)
+      );
+      if (currentIndex > 0) {
+        const prevCh = data.allChapters[currentIndex - 1];
+        setCurrentPage(0);
+        navigate(`/read/${mangaId}/chapter/${prevCh.chapterNumber}`);
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -988,9 +1144,18 @@ const prevChapter = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <div className="bg-gray-900 p-4">
+    <div className="min-h-screen bg-black text-white overflow-hidden">
+      {/* Chapter Navigation Header */}
+      <div 
+        className="bg-gray-900 p-4" 
+        style={{
+          position: 'fixed',
+          top: '64px',
+          left: '0',
+          right: '0',
+          zIndex: '100'
+        }}
+      >
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <button
             onClick={() => navigate(`/manga/${mangaId}`)}
@@ -1008,22 +1173,47 @@ const prevChapter = () => {
         </div>
       </div>
 
-      {/* Reader */}
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="max-w-4xl w-full">
-          <img
-            src={data.chapter.pages[currentPage]}
-            alt={`Page ${currentPage + 1}`}
-            className="w-full h-auto max-h-screen object-contain mx-auto"
-          />
-        </div>
+      {/* Reader Content */}
+      <div 
+        style={{
+          position: 'fixed',
+          top: '120px',
+          left: '0',
+          right: '0',
+          bottom: '80px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '10px'
+        }}
+      >
+        <img
+          src={data.chapter.pages[currentPage]}
+          alt={`Page ${currentPage + 1}`}
+          style={{
+            maxWidth: '100%',
+            maxHeight: '100%',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain'
+          }}
+        />
       </div>
 
-      {/* Navigation */}
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-gray-900 rounded-lg p-2 flex items-center space-x-4">
+      {/* Navigation Controls */}
+      <div 
+        className="bg-gray-900 rounded-lg p-2 flex items-center space-x-4"
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: '100'
+        }}
+      >
         <button
           onClick={prevPage}
-          disabled={currentPage === 0}
+          disabled={currentPage === 0 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === 0)}
           className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 rounded"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -1035,15 +1225,23 @@ const prevChapter = () => {
 
         <button
           onClick={nextPage}
-          disabled={currentPage >= data.chapter.pages.length - 1}
+          disabled={currentPage >= data.chapter.pages.length - 1 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === data.allChapters.length - 1)}
           className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 rounded"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
 
-      {/* Chapter Navigation */}
-      <div className="fixed top-1/2 transform -translate-y-1/2 left-4">
+      {/* Chapter Navigation - Left */}
+      <div 
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '20px',
+          transform: 'translateY(-50%)',
+          zIndex: '100'
+        }}
+      >
         <button
           onClick={prevChapter}
           className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
@@ -1053,7 +1251,16 @@ const prevChapter = () => {
         </button>
       </div>
 
-      <div className="fixed top-1/2 transform -translate-y-1/2 right-4">
+      {/* Chapter Navigation - Right */}
+      <div 
+        style={{
+          position: 'fixed',
+          top: '50%',
+          right: '20px',
+          transform: 'translateY(-50%)',
+          zIndex: '100'
+        }}
+      >
         <button
           onClick={nextChapter}
           className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
@@ -1065,11 +1272,27 @@ const prevChapter = () => {
 
       {/* Click areas for page navigation */}
       <div
-        className="fixed top-0 left-0 w-1/3 h-full cursor-pointer z-10"
+        className="cursor-pointer"
+        style={{
+          position: 'fixed',
+          top: '120px',
+          left: '0',
+          width: '33%',
+          bottom: '80px',
+          zIndex: '50'
+        }}
         onClick={prevPage}
       />
       <div
-        className="fixed top-0 right-0 w-1/3 h-full cursor-pointer z-10"
+        style={{
+          position: 'fixed',
+          top: '120px',
+          right: '0',
+          width: '33%',
+          bottom: '80px',
+          zIndex: '50',
+          cursor: 'pointer'
+        }}
         onClick={nextPage}
       />
     </div>
@@ -1077,38 +1300,1025 @@ const prevChapter = () => {
 };
 
 // ---------------------- Browse/Popular/Latest placeholders ----------------------
-const BrowsePage = () => (
+const BrowsePage = () => {
+  const [manga, setManga] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('title_asc');
+  const [genreFilter, setGenreFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+
+  // Fetch all manga
+useEffect(() => {
+  const fetchManga = async () => {
+    try {
+      const response = await axios.get('/api/manga');
+      const mangaList = response.data.manga || [];
+      
+      // DEBUG: Check what IDs we're getting
+      console.log('=== MANGA DEBUG START ===');
+      console.log('Total manga received:', mangaList.length);
+      console.log('');
+      
+      if (mangaList.length > 0) {
+        console.log('Manga ID Details:');
+        mangaList.forEach(m => {
+          console.log(`  Title: "${m.title}"`);
+          console.log(`  ID: "${m._id}"`);
+          console.log(`  ID Type: ${typeof m._id}`);
+          console.log(`  ID Length: ${m._id ? m._id.length : 0}`);
+          console.log('  ---');
+        });
+      } else {
+        console.log('No manga found in response!');
+      }
+      
+      console.log('=== MANGA DEBUG END ===');
+      console.log('');
+      
+      setManga(mangaList);
+    } catch (error) {
+      console.error('Error fetching manga:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchManga();
+}, []);
+
+  // Filter and sort manga
+  const filteredAndSortedManga = useMemo(() => {
+    let filtered = manga.filter(m => {
+      const matchesSearch = !searchQuery || 
+        m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.description.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesGenre = !genreFilter || 
+        m.genres.some(g => g.toLowerCase().includes(genreFilter.toLowerCase()));
+      
+      const matchesStatus = !statusFilter || m.status === statusFilter;
+      
+      return matchesSearch && matchesGenre && matchesStatus;
+    });
+
+    // Sort manga
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'title_asc': return a.title.localeCompare(b.title);
+        case 'title_desc': return b.title.localeCompare(a.title);
+        case 'rating_desc': return (b.rating || 0) - (a.rating || 0);
+        case 'rating_asc': return (a.rating || 0) - (b.rating || 0);
+        case 'views_desc': return (b.views || 0) - (a.views || 0);
+        case 'views_asc': return (a.views || 0) - (b.views || 0);
+        case 'chapters_desc': return (b.chapters || 0) - (a.chapters || 0);
+        case 'chapters_asc': return (a.chapters || 0) - (b.chapters || 0);
+        default: return 0;
+      }
+    });
+
+    return filtered;
+  }, [manga, searchQuery, sortBy, genreFilter, statusFilter]);
+
+  // Get all unique genres
+  const allGenres = useMemo(() => {
+    const genres = new Set();
+    manga.forEach(m => m.genres.forEach(g => genres.add(g)));
+    return Array.from(genres).sort();
+  }, [manga]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#141414] text-white">
+        <div className="container mx-auto px-6 py-8 pt-20">
+          <div className="flex items-center justify-center h-64">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#141414] text-white">
+      <div className="container mx-auto px-6 py-8 pt-20">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">Browse Manga</h1>
+          <p className="text-white/70">Discover your next favorite manga from our collection</p>
+        </div>
+
+        {/* Filters and Search */}
+        <div className="mb-8 space-y-4">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-white/60" />
+            <input
+              type="text"
+              placeholder="Search manga titles, descriptions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent"
+            />
+          </div>
+
+          {/* Filters Row */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Sort By */}
+            <select
+  value={sortBy}
+  onChange={(e) => setSortBy(e.target.value)}
+  className="bg-[#333] border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+  style={{
+    color: 'white',
+    backgroundColor: '#333'
+  }}
+>
+  <option value="title_asc" style={{ backgroundColor: '#333', color: 'white' }}>Title A-Z</option>
+  <option value="title_desc" style={{ backgroundColor: '#333', color: 'white' }}>Title Z-A</option>
+  <option value="rating_desc" style={{ backgroundColor: '#333', color: 'white' }}>Highest Rated</option>
+  <option value="rating_asc" style={{ backgroundColor: '#333', color: 'white' }}>Lowest Rated</option>
+  <option value="views_desc" style={{ backgroundColor: '#333', color: 'white' }}>Most Popular</option>
+  <option value="views_asc" style={{ backgroundColor: '#333', color: 'white' }}>Least Popular</option>
+  <option value="chapters_desc" style={{ backgroundColor: '#333', color: 'white' }}>Most Chapters</option>
+  <option value="chapters_asc" style={{ backgroundColor: '#333', color: 'white' }}>Fewest Chapters</option>
+</select>
+
+            {/* Genre Filter */}
+            <select
+  value={genreFilter}
+  onChange={(e) => setGenreFilter(e.target.value)}
+  className="bg-[#333] border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+  style={{
+    color: 'white',
+    backgroundColor: '#333'
+  }}
+>
+  <option value="" style={{ backgroundColor: '#333', color: 'white' }}>All Genres</option>
+  {allGenres.map(genre => (
+    <option key={genre} value={genre} style={{ backgroundColor: '#333', color: 'white' }}>{genre}</option>
+  ))}
+</select>
+
+            {/* Status Filter */}
+            <select
+  value={statusFilter}
+  onChange={(e) => setStatusFilter(e.target.value)}
+  className="bg-[#333] border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+  style={{
+    color: 'white',
+    backgroundColor: '#333'
+  }}
+>
+  <option value="" style={{ backgroundColor: '#333', color: 'white' }}>All Status</option>
+  <option value="ongoing" style={{ backgroundColor: '#333', color: 'white' }}>Ongoing</option>
+  <option value="completed" style={{ backgroundColor: '#333', color: 'white' }}>Completed</option>
+  <option value="hiatus" style={{ backgroundColor: '#333', color: 'white' }}>Hiatus</option>
+</select>
+
+            {/* Clear Filters */}
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setSortBy('title_asc');
+                setGenreFilter('');
+                setStatusFilter('');
+              }}
+              className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-4 py-3 text-white transition-colors"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+
+        {/* Results Count */}
+        <div className="mb-6">
+          <p className="text-white/70">
+            Showing {filteredAndSortedManga.length} of {manga.length} manga
+          </p>
+        </div>
+
+        {/* Manga Grid */}
+        {filteredAndSortedManga.length === 0 ? (
+          <div className="text-center py-16">
+            <BookOpen className="h-16 w-16 text-white/40 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">No manga found</h3>
+            <p className="text-white/60">Try adjusting your filters or search terms</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            {filteredAndSortedManga.map((mangaItem) => (
+              <Link
+                key={mangaItem._id}
+                to={`/manga/${mangaItem._id}`}
+                className="group cursor-pointer"
+              >
+                <div className="relative overflow-hidden rounded-lg bg-white/5 transition-transform duration-300 group-hover:scale-105">
+                  {/* Cover Image */}
+                  <div className="aspect-[3/4] relative">
+                    <img
+                      src={mangaItem.coverImage}
+                      alt={mangaItem.title}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    
+                    {/* Overlay on Hover */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <div className="text-center p-4">
+                        <h3 className="font-semibold text-sm mb-2 line-clamp-2">{mangaItem.title}</h3>
+                        <div className="flex items-center justify-center gap-4 text-xs text-white/80">
+                          <span className="flex items-center gap-1">
+                            <Star className="h-3 w-3 text-yellow-400" />
+                            {mangaItem.rating?.toFixed(1) || 'N/A'}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            {(mangaItem.views || 0).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div className="absolute top-2 left-2">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        mangaItem.status === 'completed' ? 'bg-green-600' :
+                        mangaItem.status === 'ongoing' ? 'bg-blue-600' :
+                        'bg-yellow-600'
+                      }`}>
+                        {mangaItem.status?.charAt(0).toUpperCase() + mangaItem.status?.slice(1) || 'Unknown'}
+                      </span>
+                    </div>
+
+                    {/* Chapter Count */}
+                    <div className="absolute bottom-2 right-2">
+                      <span className="bg-black/70 px-2 py-1 rounded text-xs">
+                        {mangaItem.chapters || 0} Ch
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Title (Always Visible) */}
+                  <div className="p-3">
+                    <h3 className="font-medium text-sm line-clamp-2 group-hover:text-[#e50914] transition-colors">
+                      {mangaItem.title}
+                    </h3>
+                    
+                    {/* Genres */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {mangaItem.genres?.slice(0, 2).map((genre) => (
+                        <span key={genre} className="px-1.5 py-0.5 text-xs bg-white/10 rounded text-white/70">
+                          {genre}
+                        </span>
+                      ))}
+                      {mangaItem.genres?.length > 2 && (
+                        <span className="px-1.5 py-0.5 text-xs bg-white/10 rounded text-white/70">
+                          +{mangaItem.genres.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------- Favorites (stable) ----------------------
+const FavoritesPage = () => {
+  const { user, isAuthenticated } = useAuth();
+  const [favorites, setFavorites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [hasFetched, setHasFetched] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('dateAdded'); // dateAdded, title, rating, status
+  const [filterByStatus, setFilterByStatus] = useState('all'); // all, ongoing, completed
+  const [filterByGenre, setFilterByGenre] = useState('all');
+  const [viewMode, setViewMode] = useState('grid'); // grid, list
+  const navigate = useNavigate();
+
+  // Helper function to convert ObjectId back to slug for navigation
+  const getSlugFromObjectId = (objectId) => {
+    // Map known ObjectIds back to their slugs
+    const objectIdToSlugMap = {
+      '68bef993a319f39dd3d3cc2b': 'onepiece',
+      '68bef9a4a319f39dd3d3cc43': 'onepiece', // duplicate One Piece ID
+      '68bef99aa319f39dd3d3cc3b': 'attackontitan',
+      '68bf0b81bf172fe4678f7d1b': 'attackontitan',
+      '68bf0b84bf172fe4678f7d21': 'attackontitan'
+      // Add more mappings as you discover them from console logs
+    };
+    
+    return objectIdToSlugMap[objectId] || objectId;
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      navigate('/login');
+      return;
+    }
+
+    if (hasFetched) return;
+
+    const loadFavorites = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch('http://localhost:5000/api/auth/favorites', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Favorites data:', data.favorites); // Debug line to see the data structure
+          // Add dateAdded for sorting (simulate dates for now)
+          const favoritesWithDates = (data.favorites || []).map((manga, index) => ({
+            ...manga,
+            dateAdded: new Date(Date.now() - (index * 24 * 60 * 60 * 1000)) // Simulate different dates
+          }));
+          setFavorites(favoritesWithDates);
+        }
+      } catch (error) {
+        console.error('Error loading favorites:', error);
+      } finally {
+        setLoading(false);
+        setHasFetched(true);
+      }
+    };
+
+    loadFavorites();
+  }, [isAuthenticated, navigate, hasFetched]);
+
+  // Filter and sort favorites
+  const filteredAndSortedFavorites = useMemo(() => {
+    let filtered = favorites.filter(manga => {
+      const matchesSearch = !searchQuery || 
+        manga.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        manga.description.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesStatus = filterByStatus === 'all' || manga.status === filterByStatus;
+      
+      const matchesGenre = filterByGenre === 'all' || 
+        manga.genres?.some(g => g.toLowerCase() === filterByGenre.toLowerCase());
+      
+      return matchesSearch && matchesStatus && matchesGenre;
+    });
+
+    // Sort favorites
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'title':
+          return a.title.localeCompare(b.title);
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0);
+        case 'status':
+          return a.status.localeCompare(b.status);
+        case 'dateAdded':
+        default:
+          return new Date(b.dateAdded) - new Date(a.dateAdded);
+      }
+    });
+
+    return filtered;
+  }, [favorites, searchQuery, sortBy, filterByStatus, filterByGenre]);
+
+  // Get unique genres from favorites
+  const availableGenres = useMemo(() => {
+    const genres = new Set();
+    favorites.forEach(manga => 
+      manga.genres?.forEach(genre => genres.add(genre))
+    );
+    return Array.from(genres).sort();
+  }, [favorites]);
+
+  // Calculate stats
+  const stats = useMemo(() => {
+    const genreCounts = {};
+    favorites.forEach(m => m.genres?.forEach(g => { 
+      genreCounts[g] = (genreCounts[g] || 0) + 1; 
+    }));
+    const topGenres = Object.entries(genreCounts)
+      .sort(([,a],[,b]) => b-a)
+      .slice(0,3)
+      .map(([g])=>g);
+
+    return {
+      total: favorites.length,
+      ongoing: favorites.filter(m => m.status === 'ongoing').length,
+      completed: favorites.filter(m => m.status === 'completed').length,
+      avgRating: favorites.length > 0 
+        ? (favorites.reduce((a,m)=>a+(m.rating||0),0)/favorites.length).toFixed(1)
+        : '0.0',
+      topGenres,
+      totalChapters: favorites.reduce((sum, manga) => sum + (manga.chapters || 0), 0)
+    };
+  }, [favorites]);
+
+  if (!isAuthenticated()) return null;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#141414] text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#e50914] mx-auto"></div>
+          <p className="mt-4 text-white/70">Loading your favorites...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#141414] text-white">
+      <div className="container mx-auto px-6 py-8 pt-20">
+        {/* Header Section */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">My Favorites</h1>
+          <p className="text-white/70">{stats.total} manga in your collection</p>
+        </div>
+
+        {favorites.length === 0 ? (
+          // Empty State
+          <div className="text-center py-16">
+            <div className="w-24 h-24 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Heart className="h-12 w-12 text-white/40" />
+            </div>
+            <h2 className="text-2xl font-bold mb-4">No favorites yet</h2>
+            <p className="text-white/60 mb-8 max-w-md mx-auto">
+              Start building your manga collection by adding manga to your favorites!
+            </p>
+            <Link
+              to="/browse"
+              className="bg-[#e50914] text-white px-6 py-3 rounded-lg font-semibold hover:bg-[#b20710] transition-colors"
+            >
+              Browse Manga
+            </Link>
+          </div>
+        ) : (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-[#e50914]">{stats.total}</div>
+                <div className="text-sm text-white/70">Total Manga</div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-blue-400">{stats.ongoing}</div>
+                <div className="text-sm text-white/70">Ongoing</div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-green-400">{stats.completed}</div>
+                <div className="text-sm text-white/70">Completed</div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-yellow-400">{stats.avgRating}</div>
+                <div className="text-sm text-white/70">Avg. Rating</div>
+              </div>
+            </div>
+
+            {/* Controls Section */}
+            <div className="mb-8 space-y-4">
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-white/60" />
+                <input
+                  type="text"
+                  placeholder="Search your favorites..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent"
+                />
+              </div>
+
+              {/* Filters and View Controls */}
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Sort By */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-[#333] border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+                  style={{ color: 'white', backgroundColor: '#333' }}
+                >
+                  <option value="dateAdded" style={{ backgroundColor: '#333', color: 'white' }}>Recently Added</option>
+                  <option value="title" style={{ backgroundColor: '#333', color: 'white' }}>Title A-Z</option>
+                  <option value="rating" style={{ backgroundColor: '#333', color: 'white' }}>Highest Rated</option>
+                  <option value="status" style={{ backgroundColor: '#333', color: 'white' }}>Status</option>
+                </select>
+
+                {/* Filter by Status */}
+                <select
+                  value={filterByStatus}
+                  onChange={(e) => setFilterByStatus(e.target.value)}
+                  className="bg-[#333] border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+                  style={{ color: 'white', backgroundColor: '#333' }}
+                >
+                  <option value="all" style={{ backgroundColor: '#333', color: 'white' }}>All Status</option>
+                  <option value="ongoing" style={{ backgroundColor: '#333', color: 'white' }}>Ongoing</option>
+                  <option value="completed" style={{ backgroundColor: '#333', color: 'white' }}>Completed</option>
+                </select>
+
+                {/* Filter by Genre */}
+                <select
+                  value={filterByGenre}
+                  onChange={(e) => setFilterByGenre(e.target.value)}
+                  className="bg-[#333] border border-white/20 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+                  style={{ color: 'white', backgroundColor: '#333' }}
+                >
+                  <option value="all" style={{ backgroundColor: '#333', color: 'white' }}>All Genres</option>
+                  {availableGenres.map(genre => (
+                    <option key={genre} value={genre} style={{ backgroundColor: '#333', color: 'white' }}>
+                      {genre}
+                    </option>
+                  ))}
+                </select>
+
+                {/* View Mode Toggle */}
+                <div className="flex bg-white/10 rounded-lg p-1">
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      viewMode === 'grid' ? 'bg-[#e50914] text-white' : 'text-white/70 hover:text-white'
+                    }`}
+                  >
+                    Grid
+                  </button>
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`px-3 py-1 rounded text-sm transition-colors ${
+                      viewMode === 'list' ? 'bg-[#e50914] text-white' : 'text-white/70 hover:text-white'
+                    }`}
+                  >
+                    List
+                  </button>
+                </div>
+
+                {/* Clear Filters */}
+                {(searchQuery || sortBy !== 'dateAdded' || filterByStatus !== 'all' || filterByGenre !== 'all') && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSortBy('dateAdded');
+                      setFilterByStatus('all');
+                      setFilterByGenre('all');
+                    }}
+                    className="text-white/70 hover:text-white text-sm underline"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+
+              {/* Results count */}
+              <div className="text-white/70 text-sm">
+                Showing {filteredAndSortedFavorites.length} of {favorites.length} manga
+              </div>
+            </div>
+
+            {/* Manga Display */}
+            {filteredAndSortedFavorites.length === 0 ? (
+              <div className="text-center py-16">
+                <BookOpen className="h-16 w-16 text-white/40 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold mb-2">No manga found</h3>
+                <p className="text-white/60">Try adjusting your search or filters</p>
+              </div>
+            ) : viewMode === 'grid' ? (
+              // Grid View
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                {filteredAndSortedFavorites.map((manga) => (
+                  <Link
+                    key={manga._id}
+                    to={`/manga/${getSlugFromObjectId(manga._id)}`}
+                    className="group cursor-pointer"
+                  >
+                    <div className="relative overflow-hidden rounded-lg bg-white/5 transition-transform duration-300 group-hover:scale-105">
+                      {/* Cover Image */}
+                      <div className="aspect-[3/4] relative">
+                        <img
+                          src={manga.coverImage}
+                          alt={manga.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                        
+                        {/* Overlay on Hover */}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                          <div className="text-center p-4">
+                            <h3 className="font-semibold text-sm mb-2 line-clamp-2">{manga.title}</h3>
+                            <div className="flex items-center justify-center gap-4 text-xs text-white/80">
+                              <span className="flex items-center gap-1">
+                                <Star className="h-3 w-3 text-yellow-400" />
+                                {manga.rating?.toFixed(1) || 'N/A'}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Eye className="h-3 w-3" />
+                                {(manga.views || 0).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        <div className="absolute top-2 left-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            manga.status === 'completed' ? 'bg-green-600' :
+                            manga.status === 'ongoing' ? 'bg-blue-600' :
+                            'bg-yellow-600'
+                          }`}>
+                            {manga.status?.charAt(0).toUpperCase() + manga.status?.slice(1) || 'Unknown'}
+                          </span>
+                        </div>
+
+                        {/* Chapter Count */}
+                        <div className="absolute bottom-2 right-2">
+                          <span className="bg-black/70 px-2 py-1 rounded text-xs">
+                            {manga.chapters || 0} Ch
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Title (Always Visible) */}
+                      <div className="p-3">
+                        <h3 className="font-medium text-sm line-clamp-2 group-hover:text-[#e50914] transition-colors">
+                          {manga.title}
+                        </h3>
+                        
+                        {/* Date Added */}
+                        <div className="text-xs text-white/50 mt-1">
+                          Added {manga.dateAdded.toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              // List View
+              <div className="space-y-4">
+                {filteredAndSortedFavorites.map((manga) => (
+                  <Link
+                    key={manga._id}
+                    to={`/manga/${getSlugFromObjectId(manga._id)}`}
+                    className="block bg-white/5 rounded-lg p-4 hover:bg-white/10 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={manga.coverImage}
+                        alt={manga.title}
+                        className="w-16 h-20 object-cover rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-lg truncate">{manga.title}</h3>
+                        <p className="text-white/70 text-sm line-clamp-2 mt-1">{manga.description}</p>
+                        <div className="flex items-center gap-4 mt-2 text-sm text-white/60">
+                          <span className="flex items-center gap-1">
+                            <Star className="h-4 w-4 text-yellow-400" />
+                            {manga.rating?.toFixed(1) || 'N/A'}
+                          </span>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            manga.status === 'completed' ? 'bg-green-600' :
+                            manga.status === 'ongoing' ? 'bg-blue-600' :
+                            'bg-yellow-600'
+                          }`}>
+                            {manga.status}
+                          </span>
+                          <span>{manga.chapters || 0} chapters</span>
+                          <span>Added {manga.dateAdded.toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Reading Preferences Section */}
+            {stats.topGenres.length > 0 && (
+              <div className="mt-12 bg-white/5 rounded-lg p-6">
+                <h2 className="text-xl font-bold mb-4">Your Reading Preferences</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <div className="text-sm text-white/60 mb-2">Total Chapters Available:</div>
+                    <div className="text-2xl font-bold text-[#e50914]">{stats.totalChapters.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-white/60 mb-2">Top Genres:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {stats.topGenres.map(genre => (
+                        <span key={genre} className="px-3 py-1 bg-white/10 text-white/80 rounded-full text-sm">
+                          {genre}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Stat = ({label, value, className}) => (
+  <div className="text-center">
+    <div className={`text-3xl font-bold ${className}`}>{value}</div>
+    <div className="text-sm text-gray-600 mt-1">{label}</div>
+  </div>
+);
+
+// ---------------------- Reading History placeholder ----------------------
+const ReadingHistoryPage = () => (
   <div className="min-h-screen bg-gray-50 py-12">
     <div className="max-w-7xl mx-auto px-4">
-      <h1 className="text-3xl font-bold mb-8">Browse Manga</h1>
-      <p>Browse page coming soon...</p>
+      <h1 className="text-3xl font-bold mb-8">Reading History</h1>
+      <p>Reading history feature coming soon...</p>
     </div>
   </div>
 );
 
-const PopularPage = () => (
-  <div className="min-h-screen bg-gray-50 py-12">
-    <div className="max-w-7xl mx-auto px-4">
-      <h1 className="text-3xl font-bold mb-8">Popular Manga</h1>
-      <p>Popular page coming soon...</p>
-    </div>
-  </div>
-);
+// ---------------------- Login/Signup (Netflix Style) ----------------------
+const Login = () => {
+  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-const LatestPage = () => (
-  <div className="min-h-screen bg-gray-50 py-12">
-    <div className="max-w-7xl mx-auto px-4">
-      <h1 className="text-3xl font-bold mb-8">Latest Manga</h1>
-      <p>Latest page coming soon...</p>
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    const result = await login(formData.email, formData.password);
+    if (result.success) navigate('/');
+    else setError(result.message);
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#141414] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#141414] via-[#1a1a1a] to-[#0a0a0a]"></div>
+      
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-[#e50914] mb-2">MANGAREAD</h1>
+          <h2 className="text-3xl font-bold text-white mb-2">Sign In</h2>
+          <p className="text-white/70">
+            New to MangaReader?{' '}
+            <Link to="/signup" className="text-white hover:underline font-semibold">
+              Sign up now
+            </Link>
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="bg-black/60 backdrop-blur-md py-8 px-8 shadow-2xl rounded-lg border border-white/10">
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            {error && (
+              <div className="bg-[#e50914]/10 border border-[#e50914]/20 text-[#e50914] px-4 py-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                Email address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent transition-all"
+                placeholder="Enter your email"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent transition-all"
+                placeholder="Enter your password"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  className="h-4 w-4 text-[#e50914] bg-[#333] border-white/20 rounded focus:ring-[#e50914] focus:ring-2"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-white/70">
+                  Remember me
+                </label>
+              </div>
+
+              <div className="text-sm">
+                <a href="#" className="font-medium text-white/70 hover:text-white transition-colors">
+                  Forgot password?
+                </a>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#e50914] hover:bg-[#b20710] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#e50914] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {loading ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Signing in...
+                </div>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+const Signup = () => {
+  const [formData, setFormData] = useState({ username:'', email:'', password:'', confirmPassword:'' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { register } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setLoading(false);
+      return;
+    }
+    
+    const result = await register(formData.username, formData.email, formData.password);
+    if (result.success) navigate('/');
+    else setError(result.message);
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#141414] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {/* Background Pattern */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#141414] via-[#1a1a1a] to-[#0a0a0a]"></div>
+      
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-[#e50914] mb-2">MANGAREAD</h1>
+          <h2 className="text-3xl font-bold text-white mb-2">Create your account</h2>
+          <p className="text-white/70">
+            Already have an account?{' '}
+            <Link to="/login" className="text-white hover:underline font-semibold">
+              Sign in here
+            </Link>
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="bg-black/60 backdrop-blur-md py-8 px-8 shadow-2xl rounded-lg border border-white/10">
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            {error && (
+              <div className="bg-[#e50914]/10 border border-[#e50914]/20 text-[#e50914] px-4 py-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-white mb-2">
+                Username
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                required
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent transition-all"
+                placeholder="Choose a username"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                Email address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent transition-all"
+                placeholder="Enter your email"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-white mb-2">
+                Password
+              </label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="new-password"
+                required
+                minLength="6"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent transition-all"
+                placeholder="Create a password"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-white mb-2">
+                Confirm Password
+              </label>
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                required
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent transition-all"
+                placeholder="Confirm your password"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#e50914] hover:bg-[#b20710] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#e50914] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {loading ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Creating account...
+                </div>
+              ) : (
+                'Create Account'
+              )}
+            </button>
+
+            <div className="text-xs text-white/50 text-center">
+              By creating an account, you agree to our Terms of Service and Privacy Policy.
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ---------------------- Profile ----------------------
 const ProfilePage = () => {
   const { user, updateUser } = useAuth();
-  const [_keepImports] = useState(0); // replaces the old `theconst = 0`
-
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
@@ -1309,270 +2519,6 @@ const ProfilePage = () => {
   );
 };
 
-// ---------------------- Favorites (stable) ----------------------
-const FavoritesPage = () => {
-  const { user, isAuthenticated } = useAuth();
-  const [favorites, setFavorites] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [hasFetched, setHasFetched] = useState(false);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      navigate('/login');
-      return;
-    }
-
-    if (hasFetched) return;
-
-    const loadFavorites = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setLoading(false);
-          return;
-        }
-
-        const response = await fetch('http://localhost:5000/api/auth/favorites', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setFavorites(data.favorites || []);
-        }
-      } catch (error) {
-        console.error('Error loading favorites:', error);
-      } finally {
-        setLoading(false);
-        setHasFetched(true);
-      }
-    };
-
-    loadFavorites();
-  }, []); // run once
-
-  if (!isAuthenticated()) return null;
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your favorites...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const genreCounts = {};
-  favorites.forEach(m => m.genres?.forEach(g => { genreCounts[g] = (genreCounts[g] || 0) + 1; }));
-  const topGenres = Object.entries(genreCounts).sort(([,a],[,b]) => b-a).slice(0,3).map(([g])=>g);
-
-  return (
-    <div className="min-h-screen bg-gray-50 py-12">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">My Favorites</h1>
-          <p className="text-gray-600">{favorites.length} manga in your favorites</p>
-        </div>
-
-        {favorites.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Heart className="h-12 w-12 text-gray-400" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">No favorites yet</h2>
-            <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Start building your manga collection by clicking the heart icon on any manga you love!
-            </p>
-            <Link
-              to="/"
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            >
-              Browse Manga
-            </Link>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-              {favorites.map((manga) => (
-                <MangaCard key={manga._id} manga={manga} />
-              ))}
-            </div>
-
-            <div className="mt-12 bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Your Reading Preferences</h2>
-              <div className="grid grid-cols-3 gap-6">
-                <Stat label="Ongoing Series" value={favorites.filter(m => m.status === 'ongoing').length} className="text-blue-600" />
-                <Stat label="Completed Series" value={favorites.filter(m => m.status === 'completed').length} className="text-green-600" />
-                <Stat label="Avg. Rating" value={(favorites.reduce((a,m)=>a+(m.rating||0),0)/favorites.length||0).toFixed(1)} className="text-yellow-600" />
-              </div>
-              {topGenres.length > 0 && (
-                <div className="mt-6 pt-6 border-t">
-                  <div className="text-sm text-gray-600">Top Genres:</div>
-                  <div className="flex gap-2 mt-2">
-                    {topGenres.map(g => (
-                      <span key={g} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">{g}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const Stat = ({label, value, className}) => (
-  <div className="text-center">
-    <div className={`text-3xl font-bold ${className}`}>{value}</div>
-    <div className="text-sm text-gray-600 mt-1">{label}</div>
-  </div>
-);
-
-// ---------------------- Reading History placeholder ----------------------
-const ReadingHistoryPage = () => (
-  <div className="min-h-screen bg-gray-50 py-12">
-    <div className="max-w-7xl mx-auto px-4">
-      <h1 className="text-3xl font-bold mb-8">Reading History</h1>
-      <p>Reading history feature coming soon...</p>
-    </div>
-  </div>
-);
-
-// ---------------------- Login/Signup ----------------------
-const Login = () => {
-  const [formData, setFormData] = useState({ email: '', password: '' });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { login } = useAuth();
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    const result = await login(formData.email, formData.password);
-    if (result.success) navigate('/');
-    else setError(result.message);
-    setLoading(false);
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Or{' '}
-          <Link to="/signup" className="font-medium text-blue-600 hover:text-blue-500">
-            create a new account
-          </Link>
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
-
-            <Input label="Email address" type="email" value={formData.email} onChange={(v)=>setFormData(f=>({...f,email:v}))} />
-            <Input label="Password" type="password" value={formData.password} onChange={(v)=>setFormData(f=>({...f,password:v}))} />
-
-            <div className="flex items-center justify-between">
-              <label className="flex items-center text-sm text-gray-900">
-                <input type="checkbox" className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"/>
-                Remember me
-              </label>
-              <div className="text-sm">
-                <a href="#" className="font-medium text-blue-600 hover:text-blue-500">Forgot your password?</a>
-              </div>
-            </div>
-
-            <button type="submit" disabled={loading} className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Signup = () => {
-  const [formData, setFormData] = useState({ username:'', email:'', password:'', confirmPassword:'' });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { register } = useAuth();
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-    const result = await register(formData.username, formData.email, formData.password);
-    if (result.success) navigate('/');
-    else setError(result.message);
-    setLoading(false);
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Create your account</h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Or{' '}
-          <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500">
-            sign in to your existing account
-          </Link>
-        </p>
-      </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg白 py-8 px-4 shadow sm:rounded-lg sm:px-10">
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
-
-            <Input label="Username" value={formData.username} onChange={(v)=>setFormData(f=>({...f,username:v}))} />
-            <Input label="Email address" type="email" value={formData.email} onChange={(v)=>setFormData(f=>({...f,email:v}))} />
-            <Input label="Password" type="password" minLength={6} value={formData.password} onChange={(v)=>setFormData(f=>({...f,password:v}))} />
-            <Input label="Confirm Password" type="password" minLength={6} value={formData.confirmPassword} onChange={(v)=>setFormData(f=>({...f,confirmPassword:v}))} />
-
-            <button type="submit" disabled={loading} className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
-              {loading ? 'Creating account...' : 'Create account'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Input = ({label, type="text", value, onChange, minLength}) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <div className="mt-1">
-      <input
-        type={type}
-        value={value}
-        minLength={minLength}
-        onChange={(e)=>onChange(e.target.value)}
-        className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-        required
-      />
-    </div>
-  </div>
-);
-
 // ---------------------- Search Page (results + filters) ----------------------
 const SearchPage = () => {
   const location = useLocation();
@@ -1680,7 +2626,6 @@ const SearchPage = () => {
     })
     .sort((a, b) => {
       switch (sort) {
-        case 'rating_desc': return (b.rating || 0) - (a.rating || 0);
         case 'views_desc': return (b.views || 0) - (a.views || 0);
         case 'title_asc': return (a.title || '').localeCompare(b.title || '');
         case 'title_desc': return (b.title || '').localeCompare(a.title || '');
@@ -1714,7 +2659,7 @@ const SearchPage = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search manga, authors, genres…"
-              className="w-full px-4 py-3 rounded bg-white/10 border border-white/20 text白 placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/40"
+              className="w-full px-4 py-3 rounded bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/40"
             />
             {query && (
               <button
@@ -1813,7 +2758,7 @@ const SearchPage = () => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg text-white/80">
             {loading ? 'Searching…' : `${filtered.length} result${filtered.length !== 1 ? 's' : ''}`}
-            {query && <span className="text-white/50"> for “{query}”</span>}
+            {query && <span className="text-white/50"> for "{query}"</span>}
           </h2>
         </div>
 
@@ -1838,6 +2783,513 @@ const SearchPage = () => {
   );
 };
 
+const PopularPage = () => {
+  const [popularManga, setPopularManga] = useState([]);
+  const [trendingManga, setTrendingManga] = useState([]);
+  const [topRatedManga, setTopRatedManga] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('trending');
+  const { isFavorite, toggleFavorite, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    fetchPopularData();
+  }, []);
+
+  const fetchPopularData = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('/api/manga');
+      const allManga = response.data;
+
+      // Sort manga by different criteria
+      const sortedByViews = [...allManga]
+        .filter(manga => manga.views > 0)
+        .sort((a, b) => (b.views || 0) - (a.views || 0))
+        .slice(0, 20);
+
+      const sortedByRating = [...allManga]
+        .filter(manga => manga.rating > 0)
+        .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+        .slice(0, 20);
+
+      // Simulate trending based on recent activity (you can modify this logic)
+      const trending = [...allManga]
+        .map(manga => ({
+          ...manga,
+          trendScore: (manga.views || 0) * 0.7 + (manga.rating || 0) * 30 + Math.random() * 100
+        }))
+        .sort((a, b) => b.trendScore - a.trendScore)
+        .slice(0, 20);
+
+      setPopularManga(sortedByViews);
+      setTopRatedManga(sortedByRating);
+      setTrendingManga(trending);
+    } catch (error) {
+      console.error('Error fetching popular data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFavoriteToggle = async (e, mangaId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isAuthenticated) {
+      await toggleFavorite(mangaId);
+    }
+  };
+
+  const getCurrentData = () => {
+    switch (activeTab) {
+      case 'trending':
+        return trendingManga;
+      case 'popular':
+        return popularManga;
+      case 'toprated':
+        return topRatedManga;
+      default:
+        return trendingManga;
+    }
+  };
+
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case 'trending':
+        return 'Trending Now';
+      case 'popular':
+        return 'Most Popular';
+      case 'toprated':
+        return 'Top Rated';
+      default:
+        return 'Trending Now';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#141414] text-white">
+        <div className="container mx-auto px-6 py-8 pt-24">
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#e50914]"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#141414] text-white">
+      <div className="container mx-auto px-6 py-8 pt-24">
+        {/* Hero Section */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#e50914] to-[#f40612] bg-clip-text text-transparent">
+            Popular Manga
+          </h1>
+          <p className="text-gray-300 text-lg max-w-2xl">
+            Discover the hottest manga that everyone's reading. From trending series to all-time favorites.
+          </p>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="mb-8">
+          <div className="flex space-x-1 bg-black/30 rounded-lg p-1 max-w-fit">
+            {[
+              { id: 'trending', label: 'Trending', icon: '🔥' },
+              { id: 'popular', label: 'Most Popular', icon: '👑' },
+              { id: 'toprated', label: 'Top Rated', icon: '⭐' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${
+                  activeTab === tab.id
+                    ? 'bg-[#e50914] text-white shadow-lg'
+                    : 'text-gray-400 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Current Tab Title and Count */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-white">{getTabTitle()}</h2>
+          <p className="text-gray-400 mt-1">
+            {getCurrentData().length} manga available
+          </p>
+        </div>
+
+        {/* Manga Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-8">
+          {getCurrentData().map((manga, index) => (
+            <Link
+              key={manga._id}
+              to={`/manga/${manga._id}`}
+              className="group relative cursor-pointer"
+            >
+              <div className="relative bg-[#1a1a1a] rounded-lg overflow-hidden border border-white/10 hover:border-[#e50914]/50 transition-all duration-300 transform hover:scale-105 hover:z-10">
+                {/* Rank Badge */}
+                <div className="absolute top-2 left-2 bg-[#e50914] text-white text-xs font-bold px-2 py-1 rounded-full z-10">
+                  #{index + 1}
+                </div>
+
+                {/* Favorite Button */}
+                {isAuthenticated && (
+                  <button
+                    onClick={(e) => handleFavoriteToggle(e, manga._id)}
+                    className="absolute top-2 right-2 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 transition-colors duration-200"
+                  >
+                    <svg
+                      className={`w-5 h-5 ${
+                        isFavorite(manga._id) ? 'text-[#e50914] fill-current' : 'text-white'
+                      }`}
+                      fill={isFavorite(manga._id) ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                      />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Cover Image */}
+                <div className="aspect-[3/4] bg-gradient-to-b from-gray-700 to-gray-900">
+                  {manga.coverImage ? (
+                    <img
+                      src={manga.coverImage}
+                      alt={manga.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                        <div className="text-sm text-gray-400 font-medium px-2">
+                          {manga.title}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Hover Overlay */}
+                <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                  <h3 className="font-bold text-white mb-2 line-clamp-2">{manga.title}</h3>
+                  
+                  {/* Stats Row */}
+                  <div className="flex items-center justify-between text-xs text-gray-300 mb-2">
+                    <div className="flex items-center space-x-1">
+                      <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                      <span>{manga.rating || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <Eye className="w-3 h-3" />
+                      <span>{(manga.views || 0).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div className="flex justify-between items-center">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      manga.status === 'completed' 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : manga.status === 'ongoing'
+                        ? 'bg-blue-500/20 text-blue-400'
+                        : 'bg-yellow-500/20 text-yellow-400'
+                    }`}>
+                      {manga.status || 'Unknown'}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {manga.totalChapters || 0} ch
+                    </span>
+                  </div>
+
+                  {/* Genres */}
+                  {manga.genres && manga.genres.length > 0 && (
+                    <div className="mt-2">
+                      <div className="flex flex-wrap gap-1">
+                        {manga.genres.slice(0, 2).map((genre, idx) => (
+                          <span key={idx} className="text-xs px-2 py-1 bg-white/10 rounded text-gray-300">
+                            {genre}
+                          </span>
+                        ))}
+                        {manga.genres.length > 2 && (
+                          <span className="text-xs text-gray-400">+{manga.genres.length - 2}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Trending Badge */}
+                {activeTab === 'trending' && index < 3 && (
+                  <div className="absolute bottom-2 left-2 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse">
+                    🔥 HOT
+                  </div>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {/* Empty State */}
+        {getCurrentData().length === 0 && !loading && (
+          <div className="text-center py-12">
+            <BookOpen className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-xl text-gray-400 mb-2">No manga found</h3>
+            <p className="text-gray-500">Try switching to a different tab or check back later.</p>
+          </div>
+        )}
+
+        {/* Footer Stats */}
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-[#1a1a1a] rounded-lg p-6 border border-white/10">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-[#e50914]/20 rounded-lg">
+                <TrendingUp className="w-6 h-6 text-[#e50914]" />
+              </div>
+              <div>
+                <h4 className="font-bold text-white">Trending</h4>
+                <p className="text-sm text-gray-400">{trendingManga.length} hot series</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-[#1a1a1a] rounded-lg p-6 border border-white/10">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-blue-500/20 rounded-lg">
+                <Crown className="w-6 h-6 text-blue-400" />
+              </div>
+              <div>
+                <h4 className="font-bold text-white">Most Popular</h4>
+                <p className="text-sm text-gray-400">{popularManga.length} fan favorites</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-[#1a1a1a] rounded-lg p-6 border border-white/10">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-yellow-500/20 rounded-lg">
+                <Star className="w-6 h-6 text-yellow-400" />
+              </div>
+              <div>
+                <h4 className="font-bold text-white">Top Rated</h4>
+                <p className="text-sm text-gray-400">{topRatedManga.length} highest rated</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Add this component before your App function
+const LatestPage = () => {
+  const [latestManga, setLatestManga] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { isFavorite, toggleFavorite, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    fetchLatestManga();
+  }, []);
+
+  const fetchLatestManga = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('/api/manga');
+      const allManga = response.data;
+
+      // Sort by most recently added/updated (you can modify this logic)
+      const latest = [...allManga]
+        .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0))
+        .slice(0, 24); // Show latest 24 manga
+
+      setLatestManga(latest);
+    } catch (error) {
+      console.error('Error fetching latest manga:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFavoriteToggle = async (e, mangaId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isAuthenticated) {
+      await toggleFavorite(mangaId);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#141414] text-white">
+        <div className="container mx-auto px-6 py-8 pt-24">
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#e50914]"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#141414] text-white">
+      <div className="container mx-auto px-6 py-8 pt-24">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#e50914] to-[#f40612] bg-clip-text text-transparent">
+            New Releases
+          </h1>
+          <p className="text-gray-300 text-lg max-w-2xl">
+            Stay up to date with the newest manga additions and latest chapter releases.
+          </p>
+        </div>
+
+        {/* Latest Count */}
+        <div className="mb-6">
+          <p className="text-gray-400">
+            {latestManga.length} latest releases
+          </p>
+        </div>
+
+        {/* Manga Grid */}
+        {latestManga.length === 0 ? (
+          <div className="text-center py-16">
+            <BookOpen className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-xl text-gray-400 mb-2">No new releases yet</h3>
+            <p className="text-gray-500">Check back later for the latest manga updates.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+            {latestManga.map((manga) => (
+              <Link
+                key={manga._id}
+                to={`/manga/${manga._id}`}
+                className="group relative cursor-pointer"
+              >
+                <div className="relative bg-[#1a1a1a] rounded-lg overflow-hidden border border-white/10 hover:border-[#e50914]/50 transition-all duration-300 transform hover:scale-105">
+                  {/* New Badge */}
+                  <div className="absolute top-2 left-2 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
+                    NEW
+                  </div>
+
+                  {/* Favorite Button */}
+                  {isAuthenticated && (
+                    <button
+                      onClick={(e) => handleFavoriteToggle(e, manga._id)}
+                      className="absolute top-2 right-2 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 transition-colors duration-200"
+                    >
+                      <svg
+                        className={`w-5 h-5 ${
+                          isFavorite(manga._id) ? 'text-[#e50914] fill-current' : 'text-white'
+                        }`}
+                        fill={isFavorite(manga._id) ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                        />
+                      </svg>
+                    </button>
+                  )}
+
+                  {/* Cover Image */}
+                  <div className="aspect-[3/4] bg-gradient-to-b from-gray-700 to-gray-900">
+                    {manga.coverImage ? (
+                      <img
+                        src={manga.coverImage}
+                        alt={manga.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-center">
+                          <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                          <div className="text-sm text-gray-400 font-medium px-2">
+                            {manga.title}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Hover Overlay */}
+                  <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                    <h3 className="font-bold text-white mb-2 line-clamp-2">{manga.title}</h3>
+                    
+                    {/* Stats Row */}
+                    <div className="flex items-center justify-between text-xs text-gray-300 mb-2">
+                      <div className="flex items-center space-x-1">
+                        <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                        <span>{manga.rating || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Eye className="w-3 h-3" />
+                        <span>{(manga.views || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {/* Status and Chapters */}
+                    <div className="flex justify-between items-center">
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        manga.status === 'completed' 
+                          ? 'bg-green-500/20 text-green-400' 
+                          : manga.status === 'ongoing'
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-yellow-500/20 text-yellow-400'
+                      }`}>
+                        {manga.status || 'Unknown'}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {manga.totalChapters || 0} ch
+                      </span>
+                    </div>
+
+                    {/* Genres */}
+                    {manga.genres && manga.genres.length > 0 && (
+                      <div className="mt-2">
+                        <div className="flex flex-wrap gap-1">
+                          {manga.genres.slice(0, 2).map((genre, idx) => (
+                            <span key={idx} className="text-xs px-2 py-1 bg-white/10 rounded text-gray-300">
+                              {genre}
+                            </span>
+                          ))}
+                          {manga.genres.length > 2 && (
+                            <span className="text-xs text-gray-400">+{manga.genres.length - 2}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ---------------------- App ----------------------
 function App() {
   return (
@@ -1847,19 +3299,30 @@ function App() {
           <Header />
           <main>
             <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/browse" element={<BrowsePage />} />
-              <Route path="/popular" element={<PopularPage />} />
-              <Route path="/latest" element={<LatestPage />} />
-              <Route path="/manga/:id" element={<MangaDetailPage />} />
-              <Route path="/read/:mangaId/chapter/:chapterNumber" element={<ChapterReaderPage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/favorites" element={<FavoritesPage />} />
-              <Route path="/reading-history" element={<ReadingHistoryPage />} />
-            </Routes>
+  <Route path="/" element={<HomePage />} />
+  <Route path="/browse" element={<BrowsePage />} />
+  <Route path="/popular" element={<PopularPage />} />
+  <Route path="/latest" element={<LatestPage />} />
+  <Route path="/manga/:id" element={<MangaDetailPage />} />
+  <Route path="/read/:mangaId/chapter/:chapterNumber" element={<ChapterReaderPage />} />
+  <Route path="/search" element={<SearchPage />} />
+  <Route path="/login" element={<Login />} />
+  <Route path="/signup" element={<Signup />} />
+  <Route path="/profile" element={<ProfilePage />} />
+  <Route path="/favorites" element={<FavoritesPage />} />
+  <Route path="/reading-history" element={<ReadingHistoryPage />} />
+  
+  {/* Add these two admin routes */}
+  <Route path="/admin" element={<AdminWithAuth />} />
+  <Route 
+    path="/admin/upload" 
+    element={
+      <AdminRoute>
+        <AdminUpload />
+      </AdminRoute>
+    } 
+  />
+</Routes>
           </main>
         </div>
       </Router>

@@ -7,8 +7,49 @@ import User from '../models/User.js';
 import { adminAuth } from '../middleware/auth.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import multerS3 from 'multer-s3';
+import { S3Client } from '@aws-sdk/client-s3';
 
 const router = express.Router();
+
+// Lazy-load upload middleware
+let uploadMiddleware = null;
+
+function getUploadMiddleware() {
+  if (!uploadMiddleware) {
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
+    });
+
+    console.log('Initializing S3 upload middleware...');
+    console.log('Bucket:', process.env.AWS_BUCKET_NAME);
+    console.log('Region:', process.env.AWS_REGION);
+    console.log('Access Key:', process.env.AWS_ACCESS_KEY_ID ? 'Set' : 'Not set');
+
+    uploadMiddleware = multer({
+      storage: multerS3({
+        s3: s3Client,
+        bucket: process.env.AWS_BUCKET_NAME || 'coxico',
+        key: function (req, file, cb) {
+          const mangaId = req.body.mangaId || 'temp';
+          const chapterNum = req.body.chapterNumber || '1';
+          const timestamp = Date.now();
+          cb(null, `manga/${mangaId}/chapter-${chapterNum}/${timestamp}-${file.originalname}`);
+        }
+      }),
+      limits: {
+        fileSize: 50 * 1024 * 1024, // 50MB per file
+        files: 200 // Increased to 200 files
+      }
+    });
+  }
+  return uploadMiddleware;
+}
 
 // Admin login (create admin user if doesn't exist)
 router.post('/login', [
@@ -73,7 +114,98 @@ router.post('/login', [
   }
 });
 
-// Create new manga
+// Upload cover image (using lazy-loaded middleware)
+router.post('/upload-cover', adminAuth, (req, res, next) => {
+  const upload = getUploadMiddleware().fields([
+    { name: 'cover', maxCount: 1 }
+  ]);
+  upload(req, res, next);
+}, async (req, res) => {
+  try {
+    if (!req.files || !req.files.cover || req.files.cover.length === 0) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const file = req.files.cover[0];
+    res.json({
+      success: true,
+      url: file.location,
+      key: file.key
+    });
+  } catch (error) {
+    console.error('Cover upload error:', error);
+    res.status(500).json({ error: 'Failed to upload cover' });
+  }
+});
+
+// Upload chapter pages (using lazy-loaded middleware)
+router.post('/upload-pages', adminAuth, (req, res, next) => {
+  const upload = getUploadMiddleware().fields([
+    { name: 'pages', maxCount: 200 }
+  ]);
+  upload(req, res, next);
+}, async (req, res) => {
+  try {
+    if (!req.files || !req.files.pages || req.files.pages.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+    const pageUrls = req.files.pages.map(file => file.location);
+    res.json({
+      success: true,
+      pages: pageUrls
+    });
+  } catch (error) {
+    console.error('Pages upload error:', error);
+    res.status(500).json({ error: 'Failed to upload pages' });
+  }
+});
+
+// Create new manga with chapters
+router.post('/create-manga', adminAuth, async (req, res) => {
+  try {
+    const {
+      mangaId,
+      title,
+      description,
+      author,
+      artist,
+      genres,
+      status,
+      coverImage,
+      chapters
+    } = req.body;
+
+    const newManga = new Manga({
+      _id: mangaId,
+      title,
+      description,
+      author,
+      artist,
+      genres,
+      status,
+      coverImage,
+      rating: 0,
+      views: 0,
+      favorites: 0,
+      totalChapters: chapters.length,
+      hasVolumes: false,
+      chapters,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await newManga.save();
+
+    res.json({
+      success: true,
+      manga: newManga
+    });
+  } catch (error) {
+    console.error('Create manga error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new manga (original route)
 router.post('/manga', [
   adminAuth,
   body('title').trim().notEmpty().withMessage('Title is required'),

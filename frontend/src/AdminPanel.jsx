@@ -1,5 +1,5 @@
 // frontend/src/AdminPanel.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext, createContext } from 'react';
 import { ImageUploader } from './components/ImageUploader.jsx';
 import { 
   Plus, 
@@ -20,7 +20,7 @@ import {
 import axios from 'axios';
 
 // Auth context for admin
-const AdminAuthContext = React.createContext();
+const AdminAuthContext = createContext();
 
 const AdminAuth = ({ children }) => {
   const [admin, setAdmin] = useState(null);
@@ -28,12 +28,17 @@ const AdminAuth = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setAdmin({ token });
-    }
-    setLoading(false);
-  }, [token]);
+  if (token) {
+    // Set default authorization header for all axios requests
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    setAdmin({ token });
+  } else {
+    // Remove the header if no token
+    delete axios.defaults.headers.common['Authorization'];
+  }
+  setLoading(false);
+}, [token]);
+
 
   const login = async (email, password) => {
     try {
@@ -74,7 +79,7 @@ const AdminLogin = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = React.useContext(AdminAuthContext);
+  const { login } = useContext(AdminAuthContext);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,57 +96,63 @@ const AdminLogin = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Admin Login</h1>
-          <p className="text-gray-600">Access your manga management panel</p>
+    <div className="fixed inset-0 min-h-screen bg-[#141414] flex items-center justify-center px-4 z-[9999]">
+      <div className="max-w-md w-full bg-black/60 backdrop-blur-md rounded-lg shadow-2xl p-8 border border-white/10">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-white mb-2">MANGAREAD</h2>
+          <p className="text-gray-400">Admin Panel</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+        {error && (
+          <div className="bg-red-500/20 border border-red-500/50 text-red-400 px-4 py-3 rounded mb-6">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
+              placeholder="Enter your email"
               required
             />
           </div>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Password
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
+              placeholder="Enter your password"
               required
             />
           </div>
 
-          {error && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-              {error}
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="w-full bg-[#e50914] hover:bg-[#b8070f] text-white font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center"
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+            ) : (
+              'Sign In'
+            )}
           </button>
         </form>
 
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-          <p className="text-sm text-blue-800">
+        <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <p className="text-sm text-blue-400">
             <strong>First time?</strong> Use any email and password to create your admin account.
           </p>
         </div>
@@ -157,15 +168,20 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     const fetchStats = async () => {
-      try {
-        const response = await axios.get('/api/admin/stats');
-        setStats(response.data);
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      } finally {
-        setLoading(false);
+  try {
+    const token = localStorage.getItem('adminToken');
+    const response = await axios.get('/api/admin/stats', {
+      headers: {
+        'Authorization': `Bearer ${token}`
       }
-    };
+    });
+    setStats(response.data);
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
     fetchStats();
   }, []);
@@ -173,57 +189,57 @@ const AdminDashboard = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#e50914] border-t-transparent"></div>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold text-white mb-8">Dashboard</h1>
       
       {stats && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex items-center">
-                <BookOpen className="h-8 w-8 text-blue-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Manga</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.stats.totalManga}</p>
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Total Manga</p>
+                  <p className="text-3xl font-bold text-white">{stats.stats.totalManga}</p>
                 </div>
+                <BookOpen className="h-8 w-8 text-[#e50914]" />
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex items-center">
-                <FileText className="h-8 w-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Chapters</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.stats.totalChapters}</p>
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Total Chapters</p>
+                  <p className="text-3xl font-bold text-white">{stats.stats.totalChapters}</p>
                 </div>
+                <FileText className="h-8 w-8 text-green-400" />
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow">
-              <div className="flex items-center">
-                <Users className="h-8 w-8 text-purple-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Users</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.stats.totalUsers}</p>
+            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Total Users</p>
+                  <p className="text-3xl font-bold text-white">{stats.stats.totalUsers}</p>
                 </div>
+                <Users className="h-8 w-8 text-purple-400" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Manga</h2>
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-6">
+            <h2 className="text-xl font-bold text-white mb-4">Recent Manga</h2>
             <div className="space-y-3">
               {stats.recentManga.map((manga) => (
-                <div key={manga._id} className="flex items-center justify-between py-2 border-b">
+                <div key={manga._id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
                   <div>
-                    <p className="font-medium">{manga.title}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-white">{manga.title}</p>
+                    <p className="text-sm text-gray-400">
                       Created {new Date(manga.createdAt).toLocaleDateString()}
                     </p>
                   </div>
@@ -249,34 +265,43 @@ const MangaManagement = () => {
   }, []);
 
   const fetchManga = async () => {
-    try {
-      const response = await axios.get('/api/admin/manga');
-      setManga(response.data.manga);
-    } catch (error) {
-      console.error('Error fetching manga:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteManga = async (id) => {
-    if (window.confirm('Are you sure? This will delete all chapters too.')) {
-      try {
-        await axios.delete(`/api/admin/manga/${id}`);
-        setManga(manga.filter(m => m._id !== id));
-      } catch (error) {
-        console.error('Error deleting manga:', error);
+  try {
+    const token = localStorage.getItem('adminToken');
+    const response = await axios.get('/api/admin/manga', {
+      headers: {
+        'Authorization': `Bearer ${token}`
       }
+    });
+    setManga(response.data.manga);
+  } catch (error) {
+    console.error('Error fetching manga:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const deleteManga = async (mangaId) => {
+    if (!window.confirm('Are you sure you want to delete this manga? This will also delete all its chapters.')) return;
+    
+    try {
+      const token = localStorage.getItem('adminToken');
+      await axios.delete(`/api/admin/manga/${mangaId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      alert('Manga deleted successfully!');
+      setManga(manga.filter(m => m._id !== mangaId));
+    } catch (error) {
+      alert('Failed to delete manga: ' + (error.response?.data?.error || error.message));
     }
   };
 
   return (
-    <div>
+    <div className="space-y-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Manga Management</h1>
+        <h1 className="text-3xl font-bold text-white">Manga Management</h1>
         <button
           onClick={() => setShowForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+          className="bg-[#e50914] hover:bg-[#b8070f] text-white px-4 py-2 rounded-lg transition-colors flex items-center"
         >
           <Plus className="h-5 w-5 mr-2" />
           Add Manga
@@ -285,76 +310,64 @@ const MangaManagement = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#e50914] border-t-transparent"></div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-white/10">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Manga
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Author
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Chapters
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th className="px-6 py-4 text-left text-gray-300 font-medium">Manga</th>
+                <th className="px-6 py-4 text-left text-gray-300 font-medium">Author</th>
+                <th className="px-6 py-4 text-left text-gray-300 font-medium">Status</th>
+                <th className="px-6 py-4 text-left text-gray-300 font-medium">Chapters</th>
+                <th className="px-6 py-4 text-left text-gray-300 font-medium">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-white/10">
               {manga.map((m) => (
-                <tr key={m._id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                <tr key={m._id} className="hover:bg-white/5">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center space-x-3">
                       <img 
                         src={m.coverImage} 
                         alt={m.title}
-                        className="h-12 w-8 object-cover rounded"
+                        className="w-12 h-16 object-cover rounded"
                       />
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{m.title}</div>
-                        <div className="text-sm text-gray-500">Rating: {m.rating}</div>
+                      <div>
+                        <div className="text-white font-medium">{m.title}</div>
+                        <div className="text-gray-400 text-sm">Rating: {m.rating}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {m.author}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 text-gray-300">{m.author}</td>
+                  <td className="px-6 py-4">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      m.status === 'ongoing' ? 'bg-green-100 text-green-800' :
-                      m.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                      'bg-yellow-100 text-yellow-800'
+                      m.status === 'ongoing' 
+                        ? 'bg-green-500/20 text-green-400' 
+                        : m.status === 'completed' 
+                        ? 'bg-blue-500/20 text-blue-400' 
+                        : 'bg-yellow-500/20 text-yellow-400'
                     }`}>
                       {m.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {m.actualChapterCount || 0}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <td className="px-6 py-4 text-gray-300">{m.actualChapterCount || 0}</td>
+                  <td className="px-6 py-4 space-x-2">
                     <button
                       onClick={() => {
                         setEditingManga(m);
                         setShowForm(true);
                       }}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition-colors inline-flex items-center"
                     >
-                      <Edit className="h-5 w-5" />
+                      <Edit className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => deleteManga(m._id)}
-                      className="text-red-600 hover:text-red-900"
+                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm transition-colors inline-flex items-center"
                     >
-                      <Trash2 className="h-5 w-5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
                 </tr>
@@ -421,73 +434,65 @@ const MangaForm = ({ manga, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
+      <div className="bg-black/90 backdrop-blur-md border border-white/10 rounded-lg p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">
+          <h2 className="text-xl font-bold text-white">
             {manga ? 'Edit Manga' : 'Add New Manga'}
           </h2>
-          <button onClick={onClose}>
+          <button onClick={onClose} className="text-white hover:text-gray-300">
             <X className="h-6 w-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Title
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Title</label>
             <input
               type="text"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Author
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Author</label>
               <input
                 type="text"
                 value={formData.author}
                 onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Artist
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Artist</label>
               <input
                 type="text"
                 value={formData.artist}
                 onChange={(e) => setFormData({ ...formData, artist: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               Genres (comma-separated)
             </label>
             <input
@@ -495,33 +500,29 @@ const MangaForm = ({ manga, onClose, onSave }) => {
               value={formData.genres.join(', ')}
               onChange={handleGenreChange}
               placeholder="Action, Adventure, Comedy"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cover Image URL
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Cover Image URL</label>
             <input
               type="url"
               value={formData.coverImage}
               onChange={(e) => setFormData({ ...formData, coverImage: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               >
                 <option value="ongoing">Ongoing</option>
                 <option value="completed">Completed</option>
@@ -530,9 +531,7 @@ const MangaForm = ({ manga, onClose, onSave }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Rating (0-10)
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Rating (0-10)</label>
               <input
                 type="number"
                 min="0"
@@ -540,7 +539,7 @@ const MangaForm = ({ manga, onClose, onSave }) => {
                 step="0.1"
                 value={formData.rating}
                 onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               />
             </div>
           </div>
@@ -549,14 +548,14 @@ const MangaForm = ({ manga, onClose, onSave }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
+              className="bg-[#e50914] hover:bg-[#b8070f] text-white px-6 py-2 rounded-md transition-colors disabled:opacity-50 flex items-center"
             >
               <Save className="h-4 w-4 mr-2" />
               {loading ? 'Saving...' : 'Save'}
@@ -620,11 +619,11 @@ const ChapterManagement = () => {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Chapter Management</h1>
+        <h1 className="text-3xl font-bold text-white">Chapter Management</h1>
         {selectedManga && (
           <button
             onClick={() => setShowChapterForm(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+            className="bg-[#e50914] hover:bg-[#b8070f] text-white px-4 py-2 rounded-lg transition-colors flex items-center"
           >
             <Plus className="h-5 w-5 mr-2" />
             Add Chapter
@@ -633,11 +632,11 @@ const ChapterManagement = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-lg font-semibold mb-4">Select Manga</h2>
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-4">
+          <h2 className="text-lg font-semibold text-white mb-4">Select Manga</h2>
           {loading ? (
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-4 border-[#e50914] border-t-transparent"></div>
             </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -647,8 +646,8 @@ const ChapterManagement = () => {
                   onClick={() => handleMangaSelect(m)}
                   className={`w-full text-left p-3 rounded-lg border transition-colors ${
                     selectedManga?._id === m._id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:bg-gray-50'
+                      ? 'border-[#e50914] bg-[#e50914]/20'
+                      : 'border-white/10 hover:bg-white/5'
                   }`}
                 >
                   <div className="flex items-center">
@@ -658,8 +657,8 @@ const ChapterManagement = () => {
                       className="h-12 w-8 object-cover rounded mr-3"
                     />
                     <div>
-                      <p className="font-medium text-sm">{m.title}</p>
-                      <p className="text-xs text-gray-500">{m.actualChapterCount || 0} chapters</p>
+                      <p className="font-medium text-sm text-white">{m.title}</p>
+                      <p className="text-xs text-gray-400">{m.actualChapterCount || 0} chapters</p>
                     </div>
                   </div>
                 </button>
@@ -668,20 +667,20 @@ const ChapterManagement = () => {
           )}
         </div>
 
-        <div className="lg:col-span-2 bg-white rounded-lg shadow p-4">
+        <div className="lg:col-span-2 bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-4">
           {selectedManga ? (
             <>
-              <h2 className="text-lg font-semibold mb-4">
+              <h2 className="text-lg font-semibold text-white mb-4">
                 Chapters for "{selectedManga.title}"
               </h2>
               
               {chapters.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-400">
                   <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <p>No chapters found</p>
                   <button
                     onClick={() => setShowChapterForm(true)}
-                    className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    className="mt-4 bg-[#e50914] hover:bg-[#b8070f] text-white px-4 py-2 rounded-lg transition-colors"
                   >
                     Add First Chapter
                   </button>
@@ -689,16 +688,16 @@ const ChapterManagement = () => {
               ) : (
                 <div className="space-y-3">
                   {chapters.map((chapter) => (
-                    <div key={chapter._id} className="border rounded-lg p-4">
+                    <div key={chapter._id} className="border border-white/10 rounded-lg p-4 bg-white/5">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-medium">
+                          <h3 className="font-medium text-white">
                             Chapter {chapter.chapterNumber}: {chapter.title}
                           </h3>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-400">
                             {chapter.pages?.length || 0} pages • {chapter.views} views
                           </p>
-                          <p className="text-xs text-gray-400">
+                          <p className="text-xs text-gray-500">
                             Uploaded {new Date(chapter.uploadedAt).toLocaleDateString()}
                           </p>
                         </div>
@@ -708,13 +707,13 @@ const ChapterManagement = () => {
                               setEditingChapter(chapter);
                               setShowChapterForm(true);
                             }}
-                            className="text-blue-600 hover:text-blue-800"
+                            className="text-blue-400 hover:text-blue-300"
                           >
                             <Edit className="h-5 w-5" />
                           </button>
                           <button
                             onClick={() => deleteChapter(chapter._id)}
-                            className="text-red-600 hover:text-red-800"
+                            className="text-red-400 hover:text-red-300"
                           >
                             <Trash2 className="h-5 w-5" />
                           </button>
@@ -732,7 +731,7 @@ const ChapterManagement = () => {
                             />
                           ))}
                           {chapter.pages.length > 5 && (
-                            <div className="h-16 w-12 bg-gray-100 rounded border flex items-center justify-center text-xs text-gray-500 flex-shrink-0">
+                            <div className="h-16 w-12 bg-gray-800 rounded border flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
                               +{chapter.pages.length - 5}
                             </div>
                           )}
@@ -744,7 +743,7 @@ const ChapterManagement = () => {
               )}
             </>
           ) : (
-            <div className="text-center py-12 text-gray-500">
+            <div className="text-center py-12 text-gray-400">
               <BookOpen className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               <p>Select a manga to manage its chapters</p>
             </div>
@@ -819,12 +818,12 @@ const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-screen overflow-y-auto">
+      <div className="bg-black/90 backdrop-blur-md border border-white/10 rounded-lg p-6 w-full max-w-4xl max-h-screen overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">
+          <h2 className="text-xl font-bold text-white">
             {chapter ? 'Edit Chapter' : 'Add New Chapter'} - {manga.title}
           </h2>
-          <button onClick={onClose}>
+          <button onClick={onClose} className="text-white hover:text-gray-300">
             <X className="h-6 w-6" />
           </button>
         </div>
@@ -832,53 +831,47 @@ const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Chapter Number
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Chapter Number</label>
               <input
                 type="number"
                 min="1"
                 value={formData.chapterNumber}
                 onChange={(e) => setFormData({ ...formData, chapterNumber: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Chapter Title
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Chapter Title</label>
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
                 required
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Upload Pages
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Upload Pages</label>
             <ImageUploader
               onImageUploaded={handlePagesUploaded}
               multiple={true}
               accept="image/*"
             />
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-400 mt-2">
               Tip: You can select multiple files at once or drag and drop them here
             </p>
           </div>
 
           {formData.pages.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Current Pages ({formData.pages.length})
               </label>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-60 overflow-y-auto border rounded-lg p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-60 overflow-y-auto border border-white/10 rounded-lg p-4 bg-white/5">
                 {formData.pages.map((page, index) => (
                   <div key={index} className="relative group">
                     <img
@@ -894,7 +887,7 @@ const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
                     >
                       <X className="h-3 w-3" />
                     </button>
-                    <div className="text-xs text-center mt-1 text-gray-600">
+                    <div className="text-xs text-center mt-1 text-gray-400">
                       Page {index + 1}
                     </div>
                   </div>
@@ -903,9 +896,9 @@ const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
             </div>
           )}
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 mb-2">How to add pages:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+            <h4 className="font-medium text-blue-400 mb-2">How to add pages:</h4>
+            <ul className="text-sm text-blue-300 space-y-1">
               <li>• Upload image files directly using the upload area above</li>
               <li>• Supports JPG, PNG, and GIF formats</li>
               <li>• Images will be automatically optimized for web viewing</li>
@@ -914,18 +907,18 @@ const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
             </ul>
           </div>
 
-          <div className="flex justify-end space-x-4 pt-4 border-t">
+          <div className="flex justify-end space-x-4 pt-4 border-t border-white/10">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || formData.pages.length === 0}
-              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
+              className="bg-[#e50914] hover:bg-[#b8070f] text-white px-6 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center transition-colors"
             >
               <Save className="h-4 w-4 mr-2" />
               {loading ? 'Saving...' : 'Save Chapter'}
@@ -951,15 +944,20 @@ const UserManagement = () => {
   }, []);
 
   const fetchUsers = async () => {
-    try {
-      const response = await axios.get('/api/admin/users');
-      setUsers(response.data.users || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    const token = localStorage.getItem('adminToken');
+    const response = await axios.get('/api/admin/users', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    setUsers(response.data.users || []);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const deleteUser = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
@@ -997,17 +995,17 @@ const UserManagement = () => {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+        <h1 className="text-3xl font-bold text-white">User Management</h1>
         <button
           onClick={() => setShowUserForm(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center"
+          className="bg-[#e50914] hover:bg-[#b8070f] text-white px-4 py-2 rounded-lg transition-colors flex items-center"
         >
           <Plus className="h-5 w-5 mr-2" />
           Add User
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="md:col-span-2">
             <div className="relative">
@@ -1017,7 +1015,7 @@ const UserManagement = () => {
                 placeholder="Search users by username or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               />
             </div>
           </div>
@@ -1025,7 +1023,7 @@ const UserManagement = () => {
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
             >
               <option value="all">All Roles</option>
               <option value="user">Users</option>
@@ -1037,45 +1035,33 @@ const UserManagement = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#e50914] border-t-transparent"></div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full">
+              <thead className="bg-white/10">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Activity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Joined
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Activity</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Joined</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-white/10">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan="6" className="px-6 py-12 text-center text-gray-400">
                       <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <p>No users found</p>
                     </td>
                   </tr>
                 ) : (
                   filteredUsers.map((user) => (
-                    <tr key={user._id} className="hover:bg-gray-50">
+                    <tr key={user._id} className="hover:bg-white/5">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
@@ -1086,26 +1072,22 @@ const UserManagement = () => {
                                 className="h-10 w-10 rounded-full object-cover"
                               />
                             ) : (
-                              <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                                <User className="h-6 w-6 text-gray-600" />
+                              <div className="h-10 w-10 rounded-full bg-gray-600 flex items-center justify-center">
+                                <User className="h-6 w-6 text-gray-300" />
                               </div>
                             )}
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.username}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {user.email}
-                            </div>
+                            <div className="text-sm font-medium text-white">{user.username}</div>
+                            <div className="text-sm text-gray-400">{user.email}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           user.role === 'admin' 
-                            ? 'bg-purple-100 text-purple-800' 
-                            : 'bg-gray-100 text-gray-800'
+                            ? 'bg-purple-500/20 text-purple-400' 
+                            : 'bg-gray-500/20 text-gray-400'
                         }`}>
                           {user.role}
                         </span>
@@ -1113,19 +1095,19 @@ const UserManagement = () => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           user.isActive 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-red-100 text-red-800'
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-red-500/20 text-red-400'
                         }`}>
                           {user.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                         <div>
                           <div>{user.favorites?.length || 0} favorites</div>
                           <div>{user.readingHistory?.length || 0} read</div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -1135,7 +1117,7 @@ const UserManagement = () => {
                               setEditingUser(user);
                               setShowUserForm(true);
                             }}
-                            className="text-blue-600 hover:text-blue-900"
+                            className="text-blue-400 hover:text-blue-300"
                             title="Edit user"
                           >
                             <Edit className="h-5 w-5" />
@@ -1144,8 +1126,8 @@ const UserManagement = () => {
                             onClick={() => toggleUserStatus(user._id, user.isActive)}
                             className={`${
                               user.isActive 
-                                ? 'text-red-600 hover:text-red-900' 
-                                : 'text-green-600 hover:text-green-900'
+                                ? 'text-red-400 hover:text-red-300' 
+                                : 'text-green-400 hover:text-green-300'
                             }`}
                             title={user.isActive ? 'Deactivate user' : 'Activate user'}
                           >
@@ -1157,7 +1139,7 @@ const UserManagement = () => {
                           </button>
                           <button
                             onClick={() => deleteUser(user._id)}
-                            className="text-red-600 hover:text-red-900"
+                            className="text-red-400 hover:text-red-300"
                             title="Delete user"
                           >
                             <Trash2 className="h-5 w-5" />
@@ -1171,11 +1153,9 @@ const UserManagement = () => {
             </table>
           </div>
           
-          <div className="bg-gray-50 px-6 py-4 border-t">
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <span>
-                Showing {filteredUsers.length} of {users.length} users
-              </span>
+          <div className="bg-white/10 px-6 py-4 border-t border-white/10">
+            <div className="flex items-center justify-between text-sm text-gray-300">
+              <span>Showing {filteredUsers.length} of {users.length} users</span>
               <div className="flex space-x-4">
                 <span>Active: {users.filter(u => u.isActive).length}</span>
                 <span>Admins: {users.filter(u => u.role === 'admin').length}</span>
@@ -1241,64 +1221,58 @@ const UserForm = ({ user, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+      <div className="bg-black/90 backdrop-blur-md border border-white/10 rounded-lg p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">
+          <h2 className="text-xl font-bold text-white">
             {user ? 'Edit User' : 'Add New User'}
           </h2>
-          <button onClick={onClose}>
+          <button onClick={onClose} className="text-white hover:text-gray-300">
             <X className="h-6 w-6" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Username
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
             <input
               type="text"
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
             <input
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               Password {user && '(leave blank to keep current)'}
             </label>
             <input
               type="password"
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
               required={!user}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Role
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Role</label>
             <select
               value={formData.role}
               onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
             >
               <option value="user">User</option>
               <option value="admin">Admin</option>
@@ -1311,9 +1285,9 @@ const UserForm = ({ user, onClose, onSave }) => {
               id="isActive"
               checked={formData.isActive}
               onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              className="h-4 w-4 text-[#e50914] focus:ring-[#e50914] border-gray-500 rounded bg-white/5"
             />
-            <label htmlFor="isActive" className="ml-2 text-sm text-gray-700">
+            <label htmlFor="isActive" className="ml-2 text-sm text-gray-300">
               Active user
             </label>
           </div>
@@ -1322,14 +1296,14 @@ const UserForm = ({ user, onClose, onSave }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              className="px-4 py-2 text-gray-400 hover:text-gray-200 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center"
+              className="bg-[#e50914] hover:bg-[#b8070f] text-white px-6 py-2 rounded-md transition-colors disabled:opacity-50 flex items-center"
             >
               <Save className="h-4 w-4 mr-2" />
               {loading ? 'Saving...' : 'Save'}
@@ -1344,7 +1318,7 @@ const UserForm = ({ user, onClose, onSave }) => {
 // Main Admin Panel Component
 const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { admin, logout } = React.useContext(AdminAuthContext);
+  const { admin, logout } = useContext(AdminAuthContext);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
@@ -1354,18 +1328,19 @@ const AdminPanel = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white shadow">
+    <div className="fixed inset-0 min-h-screen bg-[#141414] z-[9999] overflow-y-auto">
+      <header className="bg-black/40 backdrop-blur-md border-b border-white/10 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">Manga Admin Panel</h1>
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-2xl font-bold text-[#e50914]">MANGAREAD</h1>
+              <span className="text-gray-400">Admin Panel</span>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">Welcome, Admin</span>
+              <span className="text-gray-300">Welcome, Admin</span>
               <button
                 onClick={logout}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md flex items-center"
+                className="bg-[#e50914] hover:bg-[#b8070f] text-white px-4 py-2 rounded-lg transition-colors flex items-center"
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
@@ -1375,51 +1350,49 @@ const AdminPanel = () => {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="flex">
-          <div className="w-64 bg-white rounded-lg shadow mr-6">
-            <nav className="p-4">
-              <div className="space-y-2">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center px-4 py-3 text-left rounded-lg transition-colors ${
-                        activeTab === tab.id
-                          ? 'bg-blue-100 text-blue-700 border-blue-300'
-                          : 'text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      <Icon className="h-5 w-5 mr-3" />
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </nav>
-          </div>
+      <div className="flex">
+        <aside className="w-64 bg-black/20 border-r border-white/10 min-h-screen">
+          <nav className="p-4">
+            <div className="space-y-2">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-all ${
+                      activeTab === tab.id
+                        ? 'bg-[#e50914] text-white'
+                        : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="font-medium">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
 
-          <div className="flex-1 bg-white rounded-lg shadow p-6">
-            {activeTab === 'dashboard' && <AdminDashboard />}
-            {activeTab === 'manga' && <MangaManagement />}
-            {activeTab === 'chapters' && <ChapterManagement />}
-            {activeTab === 'users' && <UserManagement />}
-          </div>
-        </div>
+        <main className="flex-1 p-6">
+          {activeTab === 'dashboard' && <AdminDashboard />}
+          {activeTab === 'manga' && <MangaManagement />}
+          {activeTab === 'chapters' && <ChapterManagement />}
+          {activeTab === 'users' && <UserManagement />}
+        </main>
       </div>
     </div>
   );
 };
 
 const AdminApp = () => {
-  const { admin, loading } = React.useContext(AdminAuthContext);
+  const { admin, loading } = useContext(AdminAuthContext);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="fixed inset-0 min-h-screen bg-[#141414] flex items-center justify-center z-[9999]">
+        <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#e50914] border-t-transparent"></div>
       </div>
     );
   }

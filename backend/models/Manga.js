@@ -1,7 +1,24 @@
 // backend/models/Manga.js
 import mongoose from 'mongoose';
 
+const chapterSchema = new mongoose.Schema({
+  chapterNumber: { type: Number, required: true },
+  title: { type: String, required: true },
+  pages: [{ type: String }], // Array of S3 URLs
+  volumeNumber: Number,
+  volumeTitle: String,
+  views: { type: Number, default: 0 },
+  uploadedAt: { type: Date, default: Date.now }
+});
+
+const volumeSchema = new mongoose.Schema({
+  volumeNumber: { type: Number, required: true },
+  volumeTitle: { type: String, required: true },
+  chapters: [chapterSchema] // Embedded chapters
+});
+
 const MangaSchema = new mongoose.Schema({
+  _id: { type: String, required: true }, // Custom ID like 'onepiece'
   title: { 
     type: String, 
     required: true, 
@@ -48,10 +65,16 @@ const MangaSchema = new mongoose.Schema({
     type: Number, 
     default: 0 
   },
-  chapters: { 
+  totalChapters: { 
     type: Number, 
     default: 0 
-  }
+  },
+  hasVolumes: {
+    type: Boolean,
+    default: false
+  },
+  volumes: [volumeSchema], // Volume structure with embedded chapters
+  chapters: [chapterSchema] // Flat chapter list for non-volume manga
 }, {
   timestamps: true
 });

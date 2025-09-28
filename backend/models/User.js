@@ -30,6 +30,72 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Manga' 
   }],
+  
+  // Enhanced reading history with detailed progress tracking
+  readingHistory: [{
+    manga: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Manga',
+      required: true
+    },
+    chapter: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Chapter',
+      required: true
+    },
+    chapterNumber: {
+      type: Number,
+      required: true
+    },
+    currentPage: {
+      type: Number,
+      default: 0
+    },
+    totalPages: {
+      type: Number,
+      required: true
+    },
+    isCompleted: {
+      type: Boolean,
+      default: false
+    },
+    lastReadAt: {
+      type: Date,
+      default: Date.now
+    },
+    readingTime: {
+      type: Number, // in seconds
+      default: 0
+    }
+  }],
+
+  // Quick access to continue reading
+  continueReading: [{
+    manga: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Manga',
+      required: true
+    },
+    chapter: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Chapter',
+      required: true
+    },
+    chapterNumber: {
+      type: Number,
+      required: true
+    },
+    currentPage: {
+      type: Number,
+      default: 0
+    },
+    lastReadAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
+  // Keep legacy bookmarks for backward compatibility (optional)
   bookmarks: [{
     mangaId: { 
       type: mongoose.Schema.Types.ObjectId, 
@@ -50,21 +116,7 @@ const UserSchema = new mongoose.Schema({
       default: Date.now 
     }
   }],
-  readingHistory: [{
-    mangaId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Manga', 
-      required: true 
-    },
-    chapterNumber: { 
-      type: Number, 
-      required: true 
-    },
-    readAt: { 
-      type: Date, 
-      default: Date.now 
-    }
-  }],
+
   role: { 
     type: String, 
     enum: ['user', 'admin'], 

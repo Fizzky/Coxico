@@ -18,6 +18,13 @@ function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [favorites, setFavorites] = useState([]);
+  
+  // NEW: Reading progress state
+  const [continueReading, setContinueReading] = useState([]);
+  const [readingStats, setReadingStats] = useState(null);
+  
+  // Auto-mapping cache for slug to ObjectId
+  const [slugToIdCache, setSlugToIdCache] = useState({});
 
   // Set axios default header
   useEffect(() => {
@@ -41,35 +48,146 @@ function AuthProvider({ children }) {
     }
   }, [token]);
 
-  // Toggle favorite status
+  // Toggle favorite status - AUTO-LEARNING SOLUTION
   const toggleFavorite = async (mangaId) => {
-    if (!token) {
-      return { success: false, message: 'Please login to add favorites' };
-    }
-
     try {
-      const response = await axios.post(`http://localhost:5000/api/auth/favorites/toggle/${mangaId}`);
+      console.log('Toggle started for:', mangaId);
+      const token = localStorage.getItem('token');
+      if (!token) return { success: false, message: 'Not authenticated' };
       
-      // Update favorites list immediately
-      await fetchFavorites();
+      const response = await axios.post(`/api/auth/favorites/toggle/${mangaId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       
-      return { 
-        success: true, 
-        message: response.data.message,
-        isFavorite: response.data.isFavorite 
-      };
+      console.log('Toggle response:', response.data);
+      
+      if (response.data && response.data.success) {
+        // AUTO-LEARN: Save the slug-to-ObjectId mapping
+        const returnedObjectId = response.data.mangaId;
+        if (returnedObjectId && returnedObjectId !== mangaId) {
+          console.log('Learning mapping:', mangaId, '->', returnedObjectId);
+          setSlugToIdCache(prev => ({
+            ...prev,
+            [mangaId]: returnedObjectId
+          }));
+        }
+        
+        console.log('Fetching favorites...');
+        await fetchFavorites();
+        return { success: true };
+      }
     } catch (error) {
-      return {
-        success: false,
-        message: error.response?.data?.message || 'Error updating favorites'
-      };
+      console.error('Toggle favorite error:', error);
+      return { success: false, message: 'Error toggling favorite' };
     }
   };
 
-  // Check if manga is in favorites - stable reference
+  // Check if manga is in favorites - AUTO-LEARNING SOLUTION
   const isFavorite = useCallback((mangaId) => {
-    return favorites.some(fav => fav._id === mangaId);
-  }, [favorites]);
+    // Static mappings for known manga (fallback)
+    const staticMappings = {
+      'onepiece': '68bef993a319f39dd3d3cc2b',
+      'attackontitan': '68bef99aa319f39dd3d3cc3b'
+    };
+    
+    const result = favorites.some(fav => {
+      const favId = fav._id || fav;
+      
+      // Direct match
+      if (favId === mangaId) return true;
+      
+      // Check auto-learned mapping first
+      const learnedObjectId = slugToIdCache[mangaId];
+      if (learnedObjectId && favId === learnedObjectId) return true;
+      
+      // Fallback to static mapping
+      const staticObjectId = staticMappings[mangaId];
+      if (staticObjectId && favId === staticObjectId) return true;
+      
+      return false;
+    });
+    
+    console.log('isFavorite check:', { 
+      mangaId, 
+      learnedMapping: slugToIdCache[mangaId],
+      staticMapping: staticMappings[mangaId],
+      favorites: favorites.map(f => f._id || f), 
+      result 
+    });
+    return result;
+  }, [favorites, slugToIdCache]);
+
+  // NEW: Update reading progress
+  const updateReadingProgress = useCallback(async (mangaId, chapterId, chapterNumber, currentPage, totalPages, readingTime = 0) => {
+    try {
+      if (!token) return { success: false, message: 'Not authenticated' };
+
+      const response = await axios.post('http://localhost:5000/api/auth/reading-progress', {
+        mangaId,
+        chapterId, 
+        chapterNumber,
+        currentPage,
+        totalPages,
+        readingTime
+      });
+
+      // Refresh continue reading list
+      await fetchContinueReading();
+
+      return {
+        success: true,
+        isCompleted: response.data.isCompleted
+      };
+    } catch (error) {
+      console.error('Error updating reading progress:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Error updating progress'
+      };
+    }
+  }, [token]);
+
+  // NEW: Fetch continue reading list
+  const fetchContinueReading = useCallback(async () => {
+    try {
+      if (!token) return;
+      
+      const response = await axios.get('http://localhost:5000/api/auth/continue-reading');
+      setContinueReading(response.data.continueReading || []);
+    } catch (error) {
+      console.error('Error fetching continue reading:', error);
+      setContinueReading([]);
+    }
+  }, [token]);
+
+  // NEW: Fetch reading history
+  const fetchReadingHistory = useCallback(async (page = 1, filter = 'all') => {
+    try {
+      if (!token) return { history: [], pagination: {} };
+      
+      const response = await axios.get(`http://localhost:5000/api/auth/reading-history?page=${page}&filter=${filter}`);
+      return {
+        history: response.data.history || [],
+        pagination: response.data.pagination || {}
+      };
+    } catch (error) {
+      console.error('Error fetching reading history:', error);
+      return { history: [], pagination: {} };
+    }
+  }, [token]);
+
+  // NEW: Fetch reading stats
+  const fetchReadingStats = useCallback(async () => {
+    try {
+      if (!token) return;
+      
+      const response = await axios.get('http://localhost:5000/api/auth/reading-stats');
+      setReadingStats(response.data);
+    } catch (error) {
+      console.error('Error fetching reading stats:', error);
+      setReadingStats(null);
+    }
+  }, [token]);
 
   // Check if user is logged in on app load
   useEffect(() => {
@@ -88,14 +206,18 @@ function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  // Fetch favorites when user logs in - only once per login
+  // NEW: Auto-fetch continue reading and stats when user logs in
   useEffect(() => {
     if (user && token) {
       fetchFavorites();
+      fetchContinueReading();
+      fetchReadingStats();
     } else {
       setFavorites([]);
+      setContinueReading([]);
+      setReadingStats(null);
     }
-  }, [user, token, fetchFavorites]);
+  }, [user, token, fetchFavorites, fetchContinueReading, fetchReadingStats]);
 
   const login = async (email, password) => {
     try {
@@ -153,6 +275,8 @@ function AuthProvider({ children }) {
     setToken(null);
     setUser(null);
     setFavorites([]);
+    setContinueReading([]);
+    setReadingStats(null);
     
     delete axios.defaults.headers.common['Authorization'];
   };
@@ -178,7 +302,14 @@ function AuthProvider({ children }) {
     favorites,
     fetchFavorites,
     toggleFavorite,
-    isFavorite
+    isFavorite,
+    // NEW: Reading progress functions
+    continueReading,
+    readingStats,
+    updateReadingProgress,
+    fetchContinueReading,
+    fetchReadingHistory,
+    fetchReadingStats
   };
 
   return (
