@@ -1,9 +1,9 @@
 // backend/models/Chapter.js
 import mongoose from 'mongoose';
 
-const ChapterSchema = new mongoose.Schema({
+const chapterSchema = new mongoose.Schema({
   mangaId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,  // Changed from ObjectId to String
     ref: 'Manga',
     required: true,
     index: true
@@ -43,10 +43,10 @@ const ChapterSchema = new mongoose.Schema({
 });
 
 // Compound index for efficient querying
-ChapterSchema.index({ mangaId: 1, chapterNumber: 1 }, { unique: true });
-ChapterSchema.index({ uploadedAt: -1 });
+chapterSchema.index({ mangaId: 1, chapterNumber: 1 }, { unique: true });
+chapterSchema.index({ uploadedAt: -1 });
 
 // Helpful secondary indexes (existing + volume filters)
-ChapterSchema.index({ mangaId: 1, volumeNumber: 1, chapterNumber: 1 });
+chapterSchema.index({ mangaId: 1, volumeNumber: 1, chapterNumber: 1 });
 
-export default mongoose.model('Chapter', ChapterSchema);
+export default mongoose.model('Chapter', chapterSchema);

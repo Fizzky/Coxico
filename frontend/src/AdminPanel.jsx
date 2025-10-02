@@ -29,11 +29,10 @@ const AdminAuth = ({ children }) => {
 
   useEffect(() => {
   if (token) {
-    // Set default authorization header for all axios requests
+    // SET THIS DEFAULT HEADER - this is the critical fix
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setAdmin({ token });
   } else {
-    // Remove the header if no token
     delete axios.defaults.headers.common['Authorization'];
   }
   setLoading(false);
@@ -592,13 +591,14 @@ const ChapterManagement = () => {
   };
 
   const fetchChapters = async (mangaId) => {
-    try {
-      const response = await axios.get(`/api/admin/manga/${mangaId}/chapters`);
-      setChapters(response.data.chapters);
-    } catch (error) {
-      console.error('Error fetching chapters:', error);
-    }
-  };
+  try {
+    const response = await axios.get(`/api/admin/manga/${mangaId}/chapters`);
+    setChapters(response.data.chapters || []); // Add fallback
+  } catch (error) {
+    console.error('Error fetching chapters:', error);
+    setChapters([]); // Set empty array on error
+  }
+};
 
   const deleteChapter = async (chapterId) => {
     if (window.confirm('Are you sure you want to delete this chapter?')) {
@@ -611,6 +611,43 @@ const ChapterManagement = () => {
     }
   };
 
+  const deleteAllChapters = async () => {
+  if (!window.confirm(`Are you sure you want to delete ALL ${chapters?.length || 0} chapters for "${selectedManga.title}"? This action cannot be undone!`)) {
+    return;
+  }
+
+  try {
+    await axios.put(`/api/admin/manga/${selectedManga._id}`, {
+      chapters: []
+    });
+    
+    setChapters([]);
+    fetchManga();
+    alert('All chapters deleted successfully!');
+  } catch (error) {
+    console.error('Error deleting all chapters:', error);
+    alert('Failed to delete chapters');
+  }
+};
+
+const deleteMangaWithChapters = async () => {
+  if (!window.confirm(`Are you sure you want to DELETE "${selectedManga.title}" and ALL ${chapters?.length || 0} chapters? This will permanently remove the manga from your database!`)) {
+    return;
+  }
+
+  try {
+    await axios.delete(`/api/admin/manga/${selectedManga._id}`);
+    
+    setSelectedManga(null);
+    setChapters([]);
+    fetchManga();
+    alert('Manga and all chapters deleted successfully!');
+  } catch (error) {
+    console.error('Error deleting manga:', error);
+    alert('Failed to delete manga');
+  }
+};
+
   const handleMangaSelect = (mangaItem) => {
     setSelectedManga(mangaItem);
     fetchChapters(mangaItem._id);
@@ -621,14 +658,34 @@ const ChapterManagement = () => {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-white">Chapter Management</h1>
         {selectedManga && (
-          <button
-            onClick={() => setShowChapterForm(true)}
-            className="bg-[#e50914] hover:bg-[#b8070f] text-white px-4 py-2 rounded-lg transition-colors flex items-center"
-          >
-            <Plus className="h-5 w-5 mr-2" />
-            Add Chapter
-          </button>
-        )}
+  <div className="flex space-x-2">
+    <button
+      onClick={() => setShowChapterForm(true)}
+      className="bg-[#e50914] hover:bg-[#b8070f] text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+    >
+      <Plus className="h-5 w-5 mr-2" />
+      Add Chapter
+    </button>
+    {chapters && chapters.length > 0 && (
+      <>
+        <button
+          onClick={deleteAllChapters}
+          className="bg-red-700 hover:bg-red-800 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+        >
+          <Trash2 className="h-5 w-5 mr-2" />
+          Delete All Chapters
+        </button>
+        <button
+          onClick={deleteMangaWithChapters}
+          className="bg-red-900 hover:bg-red-950 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+        >
+          <Trash2 className="h-5 w-5 mr-2" />
+          Delete Manga + Chapters
+        </button>
+      </>
+    )}
+  </div>
+)}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

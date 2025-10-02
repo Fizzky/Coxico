@@ -296,23 +296,21 @@ router.delete('/manga/:id', adminAuth, async (req, res) => {
 // Get all manga for admin (with more details)
 router.get('/manga', adminAuth, async (req, res) => {
   try {
-    const manga = await Manga.find().sort({ createdAt: -1 });
+    console.log('Fetching manga for admin...');
+    const manga = await Manga.find().sort({ createdAt: -1 }).lean();
     
-    // Get chapter counts for each manga
-    const mangaWithChapterCounts = await Promise.all(
-      manga.map(async (m) => {
-        const chapterCount = await Chapter.countDocuments({ mangaId: m._id });
-        return {
-          ...m.toObject(),
-          actualChapterCount: chapterCount
-        };
-      })
-    );
+    console.log(`Found ${manga.length} manga`);
+    
+    // Count embedded chapters instead of separate collection
+    const mangaWithChapterCounts = manga.map(m => ({
+      ...m,
+      actualChapterCount: m.chapters?.length || 0  // Count from embedded array
+    }));
 
     res.json({ manga: mangaWithChapterCounts });
   } catch (error) {
     console.error('Get admin manga error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
@@ -371,13 +369,21 @@ router.post('/chapters', [
 // Get chapters for a manga (admin)
 router.get('/manga/:mangaId/chapters', adminAuth, async (req, res) => {
   try {
-    const chapters = await Chapter.find({ mangaId: req.params.mangaId })
-      .sort({ chapterNumber: 1 });
+    console.log(`Fetching chapters for manga: ${req.params.mangaId}`);
     
+    // Find manga and return its embedded chapters array
+    const manga = await Manga.findById(req.params.mangaId).lean();
+    
+    if (!manga) {
+      return res.status(404).json({ message: 'Manga not found' });
+    }
+    
+    const chapters = manga.chapters || [];
+    console.log(`Found ${chapters.length} chapters`);
     res.json({ chapters });
   } catch (error) {
     console.error('Get chapters error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
@@ -507,14 +513,23 @@ router.patch('/users/:id/status', adminAuth, async (req, res) => {
 // Get dashboard stats
 router.get('/stats', adminAuth, async (req, res) => {
   try {
+    console.log('Fetching admin stats...');
+    
     const totalManga = await Manga.countDocuments();
-    const totalChapters = await Chapter.countDocuments();
+    
+    // Count total chapters from all manga documents
+    const allManga = await Manga.find().select('chapters').lean();
+    const totalChapters = allManga.reduce((sum, m) => sum + (m.chapters?.length || 0), 0);
+    
     const totalUsers = await User.countDocuments({ role: 'user' });
     
     const recentManga = await Manga.find()
       .sort({ createdAt: -1 })
       .limit(5)
-      .select('title createdAt');
+      .select('title createdAt')
+      .lean();
+
+    console.log(`Stats: ${totalManga} manga, ${totalChapters} chapters, ${totalUsers} users`);
 
     res.json({
       stats: {
@@ -526,7 +541,7 @@ router.get('/stats', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Get stats error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 

@@ -5,14 +5,16 @@ import { Upload, X, Plus, Check, AlertCircle, FolderUp, Package } from 'lucide-r
 const AdminUpload = () => {
   const [uploadMethod, setUploadMethod] = useState('bulk');
   const [formData, setFormData] = useState({
-    mangaId: '',
-    title: '',
-    description: '',
-    author: '',
-    artist: '',
-    genres: '',
-    status: 'ongoing'
-  });
+  mangaId: '',
+  title: '',
+  description: '',
+  author: '',
+  artist: '',
+  genres: '',
+  status: 'ongoing',
+  hasVolumes: false,
+  volumes: []
+});
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
@@ -80,9 +82,7 @@ const AdminUpload = () => {
       coverData.append('mangaId', formData.mangaId);
       
       const coverResponse = await axios.post('/api/admin/upload-cover', coverData, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       setCoverUrl(coverResponse.data.url);
       
@@ -91,95 +91,149 @@ const AdminUpload = () => {
       reader.readAsDataURL(coverFile);
     }
 
-    // 2. Group files by chapter folders (nested structure)
-    const chapterMap = {};
-    
+    // 2. Detect if structure has volumes
+    const volumeMap = {};
+    const flatChapterMap = {};
+    let hasVolumes = false;
+
     files.forEach(file => {
       const path = file.webkitRelativePath;
       const parts = path.split('/');
       
-      // Skip root files and cover - need 4 parts for nested structure
-      // parts[0] = root folder, parts[1] = Volume folder, parts[2] = Chapter folder, parts[3] = image file
-      if (parts.length < 4) return;
+      if (parts.length < 3) return; // Skip root files
       
-      const chapterFolder = parts[2]; // Get the chapter folder name
+      // Check if second folder is a volume folder
+      const secondFolder = parts[1];
+      const volumeMatch = secondFolder.match(/^(?:volume|vol)\s*(\d+)/i);
       
-      // Extract chapter number and title from chapter folder
-      // Matches: "1 - Title", "1-Title", "Chapter 1 - Title"
-      const chapterMatch = chapterFolder.match(/^(?:chapter\s*)?(\d+)(?:\s*-\s*(.+))?$/i);
-      
-      if (!chapterMatch) return;
-      
-      const chapterNumber = parseInt(chapterMatch[1]);
-      const chapterTitle = chapterMatch[2] 
-        ? chapterMatch[2].trim()
-        : `Chapter ${chapterNumber}`;
-      
-      if (!chapterMap[chapterNumber]) {
-        chapterMap[chapterNumber] = {
-          chapterNumber,
-          title: chapterTitle,
-          files: []
-        };
-      }
-      
-      chapterMap[chapterNumber].files.push(file);
-    });
-
-    // 3. Upload chapters in order
-    const sortedChapters = Object.values(chapterMap).sort((a, b) => a.chapterNumber - b.chapterNumber);
-    const uploadedChapters = [];
-
-    for (const chapter of sortedChapters) {
-      setMessage(`Uploading Chapter ${chapter.chapterNumber}: ${chapter.title}...`);
-      
-      // Sort files naturally (1.jpg, 2.jpg, ... 10.jpg, 11.jpg)
-      const sortedFiles = chapter.files.sort((a, b) => {
-        const numA = parseInt(a.name.match(/\d+/)?.[0] || '0');
-        const numB = parseInt(b.name.match(/\d+/)?.[0] || '0');
-        return numA - numB;
-      });
-
-      // Upload pages - CHUNKED FOR LARGE VOLUMES
-      if (sortedFiles.length > 150) {
-        const chunkSize = 150;
-        const allPages = [];
+      if (volumeMatch && parts.length >= 4) {
+        // Structure: root/Volume X/Chapter Y/image.jpg
+        hasVolumes = true;
+        const volumeNumber = parseInt(volumeMatch[1]);
+        const chapterFolder = parts[2];
         
-        for (let i = 0; i < sortedFiles.length; i += chunkSize) {
-          const chunk = sortedFiles.slice(i, i + chunkSize);
-          const chunkData = new FormData();
-          chunk.forEach(file => chunkData.append('pages', file));
-          chunkData.append('mangaId', formData.mangaId);
-          chunkData.append('chapterNumber', chapter.chapterNumber);
-          
-          setMessage(`Uploading Chapter ${chapter.chapterNumber}: ${i + 1}-${Math.min(i + chunkSize, sortedFiles.length)} of ${sortedFiles.length} pages...`);
-          
-          const chunkResponse = await axios.post('/api/admin/upload-pages', chunkData, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          
-          allPages.push(...chunkResponse.data.pages);
+        // Extract chapter info
+        const chapterMatch = chapterFolder.match(/^(?:chapter\s*)?(\d+)(?:\s*-\s*(.+))?$/i);
+        if (!chapterMatch) return;
+        
+        const chapterNumber = parseInt(chapterMatch[1]);
+        const chapterTitle = chapterMatch[2]?.trim() || `Chapter ${chapterNumber}`;
+        
+        // Initialize volume
+        if (!volumeMap[volumeNumber]) {
+          volumeMap[volumeNumber] = {
+            volumeNumber,
+            volumeTitle: `Volume ${volumeNumber}`,
+            chapters: {}
+          };
         }
         
-        uploadedChapters.push({
-          chapterNumber: chapter.chapterNumber,
-          title: chapter.title,
-          pages: allPages,
-          views: 0,
-          uploadedAt: new Date()
+        // Initialize chapter within volume
+        if (!volumeMap[volumeNumber].chapters[chapterNumber]) {
+          volumeMap[volumeNumber].chapters[chapterNumber] = {
+            chapterNumber,
+            title: chapterTitle,
+            files: []
+          };
+        }
+        
+        volumeMap[volumeNumber].chapters[chapterNumber].files.push(file);
+      } else if (parts.length >= 3) {
+        // Structure: root/Chapter Y/image.jpg (no volumes)
+        const chapterFolder = parts[1];
+        const chapterMatch = chapterFolder.match(/^(?:chapter\s*)?(\d+)(?:\s*-\s*(.+))?$/i);
+        
+        if (!chapterMatch) return;
+        
+        const chapterNumber = parseInt(chapterMatch[1]);
+        const chapterTitle = chapterMatch[2]?.trim() || `Chapter ${chapterNumber}`;
+        
+        if (!flatChapterMap[chapterNumber]) {
+          flatChapterMap[chapterNumber] = {
+            chapterNumber,
+            title: chapterTitle,
+            files: []
+          };
+        }
+        
+        flatChapterMap[chapterNumber].files.push(file);
+      }
+    });
+
+    // 3. Process based on structure
+    let uploadedChapters = [];
+    let volumes = [];
+
+    if (hasVolumes) {
+      // Process volumes
+      setMessage('Detected volume structure...');
+      
+      const sortedVolumes = Object.values(volumeMap).sort((a, b) => a.volumeNumber - b.volumeNumber);
+      
+      for (const volume of sortedVolumes) {
+        const sortedChapters = Object.values(volume.chapters).sort((a, b) => a.chapterNumber - b.chapterNumber);
+        const volumeChapters = [];
+        
+        for (const chapter of sortedChapters) {
+          setMessage(`Uploading Volume ${volume.volumeNumber}, Chapter ${chapter.chapterNumber}: ${chapter.title}...`);
+          
+          // Sort files naturally
+          const sortedFiles = chapter.files.sort((a, b) => {
+            const numA = parseInt(a.name.match(/\d+/)?.[0] || '0');
+            const numB = parseInt(b.name.match(/\d+/)?.[0] || '0');
+            return numA - numB;
+          });
+
+          // Upload pages
+          const pagesData = new FormData();
+          sortedFiles.forEach(file => pagesData.append('pages', file));
+          pagesData.append('mangaId', formData.mangaId);
+          pagesData.append('chapterNumber', chapter.chapterNumber);
+
+          const pagesResponse = await axios.post('/api/admin/upload-pages', pagesData, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          const uploadedChapter = {
+            chapterNumber: chapter.chapterNumber,
+            title: chapter.title,
+            pages: pagesResponse.data.pages,
+            views: 0,
+            uploadedAt: new Date()
+          };
+          
+          volumeChapters.push(uploadedChapter);
+          uploadedChapters.push(uploadedChapter);
+        }
+        
+        volumes.push({
+          volumeNumber: volume.volumeNumber,
+          volumeTitle: volume.volumeTitle,
+          chapters: volumeChapters
         });
-      } else {
+      }
+    } else {
+      // Process flat structure (no volumes)
+      setMessage('Detected flat chapter structure...');
+      
+      const sortedChapters = Object.values(flatChapterMap).sort((a, b) => a.chapterNumber - b.chapterNumber);
+      
+      for (const chapter of sortedChapters) {
+        setMessage(`Uploading Chapter ${chapter.chapterNumber}: ${chapter.title}...`);
+        
+        const sortedFiles = chapter.files.sort((a, b) => {
+          const numA = parseInt(a.name.match(/\d+/)?.[0] || '0');
+          const numB = parseInt(b.name.match(/\d+/)?.[0] || '0');
+          return numA - numB;
+        });
+
         const pagesData = new FormData();
         sortedFiles.forEach(file => pagesData.append('pages', file));
         pagesData.append('mangaId', formData.mangaId);
         pagesData.append('chapterNumber', chapter.chapterNumber);
 
         const pagesResponse = await axios.post('/api/admin/upload-pages', pagesData, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         
         uploadedChapters.push({
@@ -193,7 +247,14 @@ const AdminUpload = () => {
     }
 
     setChapters(uploadedChapters);
-    setMessage(`Successfully processed ${uploadedChapters.length} chapters!`);
+    
+    // Store volumes info for submission
+    if (hasVolumes) {
+      setFormData(prev => ({ ...prev, volumes, hasVolumes: true }));
+      setMessage(`Successfully processed ${volumes.length} volumes with ${uploadedChapters.length} chapters!`);
+    } else {
+      setMessage(`Successfully processed ${uploadedChapters.length} chapters!`);
+    }
   } catch (error) {
     setMessage('Bulk upload failed: ' + (error.response?.data?.error || error.message));
   } finally {
@@ -251,55 +312,57 @@ const AdminUpload = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setUploading(true);
-    setMessage('');
+  e.preventDefault();
+  setUploading(true);
+  setMessage('');
 
-    try {
-      const token = localStorage.getItem('token');
-      const mangaData = {
-        mangaId: formData.mangaId.toLowerCase().replace(/\s+/g, ''),
-        title: formData.title,
-        description: formData.description,
-        author: formData.author,
-        artist: formData.artist,
-        genres: formData.genres.split(',').map(g => g.trim()),
-        status: formData.status,
-        coverImage: coverUrl,
-        chapters: chapters.map(ch => ({
-          chapterNumber: ch.chapterNumber,
-          title: ch.title,
-          pages: ch.pages,
-          views: 0,
-          uploadedAt: new Date()
-        }))
-      };
+  try {
+    const token = localStorage.getItem('token');
+    const mangaData = {
+      mangaId: formData.mangaId.toLowerCase().replace(/\s+/g, ''),
+      title: formData.title,
+      description: formData.description,
+      author: formData.author,
+      artist: formData.artist,
+      genres: formData.genres.split(',').map(g => g.trim()),
+      status: formData.status,
+      coverImage: coverUrl,
+      hasVolumes: formData.hasVolumes || false,
+      volumes: formData.volumes || [],
+      chapters: chapters.map(ch => ({
+        chapterNumber: ch.chapterNumber,
+        title: ch.title,
+        pages: ch.pages,
+        views: 0,
+        uploadedAt: new Date()
+      }))
+    };
 
-      await axios.post('/api/admin/create-manga', mangaData, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      setMessage('Manga created successfully!');
-      
-      setFormData({
-        mangaId: '',
-        title: '',
-        description: '',
-        author: '',
-        artist: '',
-        genres: '',
-        status: 'ongoing'
-      });
-      setCoverUrl('');
-      setCoverPreview('');
-      setChapters([{ chapterNumber: 1, title: '', pages: [] }]);
-    } catch (error) {
-      setMessage(`Error: ${error.response?.data?.error || 'Failed to create manga'}`);
-    } finally {
-      setUploading(false);
-    }
-  };
+    await axios.post('/api/admin/create-manga', mangaData, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setMessage('Manga created successfully!');
+    
+    setFormData({
+  mangaId: '',
+  title: '',
+  description: '',
+  author: '',
+  artist: '',
+  genres: '',
+  status: 'ongoing',
+  hasVolumes: false,
+  volumes: []
+});
+    setCoverUrl('');
+    setCoverPreview('');
+    setChapters([{ chapterNumber: 1, title: '', pages: [] }]);
+  } catch (error) {
+    setMessage(`Error: ${error.response?.data?.error || 'Failed to create manga'}`);
+  } finally {
+    setUploading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-[#141414] text-white">

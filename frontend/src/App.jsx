@@ -814,7 +814,7 @@ const MangaDetailPage = () => {
 
           <div className="billboard-buttons">
   {firstChapter && (
-    <Link to={`/read/${manga._id}/chapter/${firstChapter.chapterNumber}`} className="btn btn-play">
+    <Link to={`/manga/${manga._id}/chapter/${firstChapter.chapterNumber}`} className="btn btn-play">
       ▶ Read Chapter {firstChapter.chapterNumber}
     </Link>
   )}
@@ -885,7 +885,7 @@ const MangaDetailPage = () => {
             {volume.chapters.map((chapter, idx) => (
               <Link
                 key={chapter._id}
-                to={`/read/${manga._id}/chapter/${chapter.chapterNumber}`}
+                to={`/manga/${manga._id}/chapter/${chapter.chapterNumber}`}
                 className={`block px-6 py-4 text-white/90 hover:bg-white/10 transition-colors ${
                   idx !== volume.chapters.length - 1 ? 'border-b border-white/10' : ''
                 }`}
@@ -914,7 +914,7 @@ const MangaDetailPage = () => {
           {chapters.map((chapter, idx) => (
             <Link
               key={chapter._id}
-              to={`/read/${manga._id}/chapter/${chapter.chapterNumber}`}
+              to={`/manga/${manga._id}/chapter/${chapter.chapterNumber}`}
               className={`block px-6 py-4 text-white/90 hover:bg-white/10 transition-colors ${
                 idx !== chapters.length - 1 ? 'border-b border-white/10' : ''
               }`}
@@ -1085,7 +1085,7 @@ const ChapterReaderPage = () => {
       if (currentIndex < data.allChapters.length - 1) {
         const nextCh = data.allChapters[currentIndex + 1];
         setCurrentPage(0);
-        navigate(`/read/${mangaId}/chapter/${nextCh.chapterNumber}`);
+        navigate(`/manga/${mangaId}/chapter/${nextCh.chapterNumber}`);
       }
     }
   };
@@ -1098,7 +1098,7 @@ const ChapterReaderPage = () => {
       if (currentIndex > 0) {
         const prevCh = data.allChapters[currentIndex - 1];
         sessionStorage.setItem('goToLastPage', 'true');
-        navigate(`/read/${mangaId}/chapter/${prevCh.chapterNumber}`);
+        navigate(`/manga/${mangaId}/chapter/${prevCh.chapterNumber}`);
       }
     }
   };
@@ -1111,7 +1111,7 @@ const ChapterReaderPage = () => {
       if (currentIndex > 0) {
         const prevCh = data.allChapters[currentIndex - 1];
         setCurrentPage(0);
-        navigate(`/read/${mangaId}/chapter/${prevCh.chapterNumber}`);
+        navigate(`/manga/${mangaId}/chapter/${prevCh.chapterNumber}`);
       }
     }
   };
@@ -1232,43 +1232,43 @@ const ChapterReaderPage = () => {
         </button>
       </div>
 
-      {/* Chapter Navigation - Left */}
-      <div 
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: '20px',
-          transform: 'translateY(-50%)',
-          zIndex: '100'
-        }}
-      >
-        <button
-          onClick={prevChapter}
-          className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
-          disabled={!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === 0}
-        >
-          <ArrowLeft className="h-6 w-6" />
-        </button>
-      </div>
+      {/* Page Navigation - Left */}
+<div 
+  style={{
+    position: 'fixed',
+    top: '50%',
+    left: '20px',
+    transform: 'translateY(-50%)',
+    zIndex: '100'
+  }}
+>
+  <button
+    onClick={prevPage}
+    className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
+    disabled={currentPage === 0 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === 0)}
+  >
+    <ArrowLeft className="h-6 w-6" />
+  </button>
+</div>
 
-      {/* Chapter Navigation - Right */}
-      <div 
-        style={{
-          position: 'fixed',
-          top: '50%',
-          right: '20px',
-          transform: 'translateY(-50%)',
-          zIndex: '100'
-        }}
-      >
-        <button
-          onClick={nextChapter}
-          className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
-          disabled={!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === data.allChapters.length - 1}
-        >
-          <ArrowRight className="h-6 w-6" />
-        </button>
-      </div>
+{/* Page Navigation - Right */}
+<div 
+  style={{
+    position: 'fixed',
+    top: '50%',
+    right: '20px',
+    transform: 'translateY(-50%)',
+    zIndex: '100'
+  }}
+>
+  <button
+    onClick={nextPage}
+    className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
+    disabled={currentPage >= data.chapter.pages.length - 1 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === data.allChapters.length - 1)}
+  >
+    <ArrowRight className="h-6 w-6" />
+  </button>
+</div>
 
       {/* Click areas for page navigation */}
       <div
@@ -1725,7 +1725,13 @@ const FavoritesPage = () => {
         ? (favorites.reduce((a,m)=>a+(m.rating||0),0)/favorites.length).toFixed(1)
         : '0.0',
       topGenres,
-      totalChapters: favorites.reduce((sum, manga) => sum + (manga.chapters || 0), 0)
+      totalChapters: favorites.reduce((sum, manga) => {
+  // Handle if chapters is an array
+  const chapterCount = Array.isArray(manga.chapters) 
+    ? manga.chapters.length 
+    : (manga.totalChapters || manga.chapters || 0);
+  return sum + chapterCount;
+}, 0)
     };
   }, [favorites]);
 
@@ -1945,7 +1951,7 @@ const FavoritesPage = () => {
                         {/* Chapter Count */}
                         <div className="absolute bottom-2 right-2">
                           <span className="bg-black/70 px-2 py-1 rounded text-xs">
-                            {manga.chapters || 0} Ch
+                            {manga.totalChapters || 0} Ch
                           </span>
                         </div>
                       </div>
@@ -1995,7 +2001,7 @@ const FavoritesPage = () => {
                           }`}>
                             {manga.status}
                           </span>
-                          <span>{manga.chapters || 0} chapters</span>
+                          <span>{manga.totalChapters || 0} chapters</span>
                           <span>Added {manga.dateAdded.toLocaleDateString()}</span>
                         </div>
                       </div>
@@ -2799,7 +2805,7 @@ const PopularPage = () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/manga');
-      const allManga = response.data;
+      const allManga = response.data.manga || [];
 
       // Sort manga by different criteria
       const sortedByViews = [...allManga]
@@ -3099,6 +3105,8 @@ const PopularPage = () => {
 const LatestPage = () => {
   const [latestManga, setLatestManga] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('newest'); // newest, oldest, popular, rating
+  const [filterStatus, setFilterStatus] = useState('all'); // all, ongoing, completed
   const { isFavorite, toggleFavorite, isAuthenticated } = useAuth();
 
   useEffect(() => {
@@ -3109,12 +3117,11 @@ const LatestPage = () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/manga');
-      const allManga = response.data;
+      const allManga = response.data.manga || [];
 
-      // Sort by most recently added/updated (you can modify this logic)
       const latest = [...allManga]
         .sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0))
-        .slice(0, 24); // Show latest 24 manga
+        .slice(0, 48); // Show more manga
 
       setLatestManga(latest);
     } catch (error) {
@@ -3132,6 +3139,31 @@ const LatestPage = () => {
     }
   };
 
+  // Filter and sort
+  const filteredAndSortedManga = useMemo(() => {
+    let filtered = latestManga.filter(m => {
+      if (filterStatus === 'all') return true;
+      return m.status === filterStatus;
+    });
+
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0);
+        case 'oldest':
+          return new Date(a.createdAt || a.updatedAt || 0) - new Date(b.createdAt || b.updatedAt || 0);
+        case 'popular':
+          return (b.views || 0) - (a.views || 0);
+        case 'rating':
+          return (b.rating || 0) - (a.rating || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [latestManga, sortBy, filterStatus]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#141414] text-white">
@@ -3147,7 +3179,7 @@ const LatestPage = () => {
   return (
     <div className="min-h-screen bg-[#141414] text-white">
       <div className="container mx-auto px-6 py-8 pt-24">
-        {/* Header */}
+        {/* Header with gradient */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-[#e50914] to-[#f40612] bg-clip-text text-transparent">
             New Releases
@@ -3157,33 +3189,64 @@ const LatestPage = () => {
           </p>
         </div>
 
-        {/* Latest Count */}
-        <div className="mb-6">
-          <p className="text-gray-400">
-            {latestManga.length} latest releases
-          </p>
+        {/* Filters and Sort */}
+        <div className="mb-8 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white/70">Sort by:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-[#333] border border-white/20 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+              style={{ color: 'white', backgroundColor: '#333' }}
+            >
+              <option value="newest" style={{ backgroundColor: '#333', color: 'white' }}>Newest First</option>
+              <option value="oldest" style={{ backgroundColor: '#333', color: 'white' }}>Oldest First</option>
+              <option value="popular" style={{ backgroundColor: '#333', color: 'white' }}>Most Popular</option>
+              <option value="rating" style={{ backgroundColor: '#333', color: 'white' }}>Highest Rated</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white/70">Status:</span>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="bg-[#333] border border-white/20 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+              style={{ color: 'white', backgroundColor: '#333' }}
+            >
+              <option value="all" style={{ backgroundColor: '#333', color: 'white' }}>All Status</option>
+              <option value="ongoing" style={{ backgroundColor: '#333', color: 'white' }}>Ongoing</option>
+              <option value="completed" style={{ backgroundColor: '#333', color: 'white' }}>Completed</option>
+            </select>
+          </div>
+
+          <div className="text-sm text-white/60 ml-auto">
+            {filteredAndSortedManga.length} {filteredAndSortedManga.length === 1 ? 'release' : 'releases'}
+          </div>
         </div>
 
         {/* Manga Grid */}
-        {latestManga.length === 0 ? (
-          <div className="text-center py-16">
+        {filteredAndSortedManga.length === 0 ? (
+          <div className="text-center py-16 bg-white/5 rounded-lg border border-white/10">
             <BookOpen className="h-16 w-16 text-gray-600 mx-auto mb-4" />
             <h3 className="text-xl text-gray-400 mb-2">No new releases yet</h3>
             <p className="text-gray-500">Check back later for the latest manga updates.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {latestManga.map((manga) => (
+            {filteredAndSortedManga.map((manga, index) => (
               <Link
                 key={manga._id}
                 to={`/manga/${manga._id}`}
                 className="group relative cursor-pointer"
               >
                 <div className="relative bg-[#1a1a1a] rounded-lg overflow-hidden border border-white/10 hover:border-[#e50914]/50 transition-all duration-300 transform hover:scale-105">
-                  {/* New Badge */}
-                  <div className="absolute top-2 left-2 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10">
-                    NEW
-                  </div>
+                  {/* New Badge - only for first 12 items */}
+                  {index < 12 && (
+                    <div className="absolute top-2 left-2 bg-green-600 text-white text-xs font-bold px-2 py-1 rounded-full z-10 shadow-lg">
+                      NEW
+                    </div>
+                  )}
 
                   {/* Favorite Button */}
                   {isAuthenticated && (
@@ -3191,71 +3254,50 @@ const LatestPage = () => {
                       onClick={(e) => handleFavoriteToggle(e, manga._id)}
                       className="absolute top-2 right-2 z-10 p-2 rounded-full bg-black/60 hover:bg-black/80 transition-colors duration-200"
                     >
-                      <svg
-                        className={`w-5 h-5 ${
-                          isFavorite(manga._id) ? 'text-[#e50914] fill-current' : 'text-white'
-                        }`}
-                        fill={isFavorite(manga._id) ? 'currentColor' : 'none'}
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-                        />
-                      </svg>
+                      <Heart className={`w-4 h-4 ${
+                        isFavorite(manga._id) ? 'fill-[#e50914] text-[#e50914]' : 'text-white'
+                      }`} />
                     </button>
                   )}
 
                   {/* Cover Image */}
-                  <div className="aspect-[3/4] bg-gradient-to-b from-gray-700 to-gray-900">
+                  <div className="aspect-[3/4] bg-gradient-to-b from-gray-700 to-gray-900 relative overflow-hidden">
                     {manga.coverImage ? (
                       <img
                         src={manga.coverImage}
                         alt={manga.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                         onError={(e) => {
                           e.target.style.display = 'none';
                         }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <div className="text-center">
-                          <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                          <div className="text-sm text-gray-400 font-medium px-2">
-                            {manga.title}
-                          </div>
-                        </div>
+                        <BookOpen className="w-12 h-12 text-gray-400" />
                       </div>
                     )}
                   </div>
 
-                  {/* Hover Overlay */}
-                  <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                    <h3 className="font-bold text-white mb-2 line-clamp-2">{manga.title}</h3>
+                  {/* Info Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                    <h3 className="font-bold text-white text-sm mb-2 line-clamp-2">{manga.title}</h3>
                     
-                    {/* Stats Row */}
                     <div className="flex items-center justify-between text-xs text-gray-300 mb-2">
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center gap-1">
                         <Star className="w-3 h-3 text-yellow-400 fill-current" />
-                        <span>{manga.rating || 'N/A'}</span>
+                        <span>{manga.rating?.toFixed(1) || 'N/A'}</span>
                       </div>
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center gap-1">
                         <Eye className="w-3 h-3" />
-                        <span>{(manga.views || 0).toLocaleString()}</span>
+                        <span>{((manga.views || 0) / 1000).toFixed(1)}K</span>
                       </div>
                     </div>
 
-                    {/* Status and Chapters */}
-                    <div className="flex justify-between items-center">
+                    <div className="flex items-center justify-between">
                       <span className={`text-xs px-2 py-1 rounded-full ${
-                        manga.status === 'completed' 
-                          ? 'bg-green-500/20 text-green-400' 
-                          : manga.status === 'ongoing'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : 'bg-yellow-500/20 text-yellow-400'
+                        manga.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                        manga.status === 'ongoing' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-yellow-500/20 text-yellow-400'
                       }`}>
                         {manga.status || 'Unknown'}
                       </span>
@@ -3266,18 +3308,25 @@ const LatestPage = () => {
 
                     {/* Genres */}
                     {manga.genres && manga.genres.length > 0 && (
-                      <div className="mt-2">
-                        <div className="flex flex-wrap gap-1">
-                          {manga.genres.slice(0, 2).map((genre, idx) => (
-                            <span key={idx} className="text-xs px-2 py-1 bg-white/10 rounded text-gray-300">
-                              {genre}
-                            </span>
-                          ))}
-                          {manga.genres.length > 2 && (
-                            <span className="text-xs text-gray-400">+{manga.genres.length - 2}</span>
-                          )}
-                        </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {manga.genres.slice(0, 2).map((genre, idx) => (
+                          <span key={idx} className="text-xs px-2 py-0.5 bg-white/10 rounded text-gray-300">
+                            {genre}
+                          </span>
+                        ))}
                       </div>
+                    )}
+                  </div>
+
+                  {/* Title below image */}
+                  <div className="p-3 bg-[#1a1a1a]">
+                    <h3 className="font-medium text-sm line-clamp-2 group-hover:text-[#e50914] transition-colors">
+                      {manga.title}
+                    </h3>
+                    {manga.createdAt && (
+                      <p className="text-xs text-white/50 mt-1">
+                        Added {new Date(manga.createdAt).toLocaleDateString()}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -3304,7 +3353,7 @@ function App() {
   <Route path="/popular" element={<PopularPage />} />
   <Route path="/latest" element={<LatestPage />} />
   <Route path="/manga/:id" element={<MangaDetailPage />} />
-  <Route path="/read/:mangaId/chapter/:chapterNumber" element={<ChapterReaderPage />} />
+  <Route path="/manga/:mangaId/chapter/:chapterNumber" element={<ChapterReaderPage />} />
   <Route path="/search" element={<SearchPage />} />
   <Route path="/login" element={<Login />} />
   <Route path="/signup" element={<Signup />} />

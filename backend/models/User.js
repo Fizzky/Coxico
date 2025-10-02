@@ -27,47 +27,23 @@ const UserSchema = new mongoose.Schema({
     default: null 
   },
   favorites: [{ 
-    type: mongoose.Schema.Types.ObjectId, 
+    type: String, 
     ref: 'Manga' 
   }],
   
   // Enhanced reading history with detailed progress tracking
   readingHistory: [{
-    manga: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Manga',
-      required: true
-    },
-    chapter: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Chapter',
-      required: true
-    },
-    chapterNumber: {
-      type: Number,
-      required: true
-    },
-    currentPage: {
-      type: Number,
-      default: 0
-    },
-    totalPages: {
-      type: Number,
-      required: true
-    },
-    isCompleted: {
-      type: Boolean,
-      default: false
-    },
-    lastReadAt: {
-      type: Date,
-      default: Date.now
-    },
-    readingTime: {
-      type: Number, // in seconds
-      default: 0
-    }
-  }],
+  mangaId: {
+    type: String,  // Change from ObjectId to String
+    ref: 'Manga'
+  },
+  chapterId: {
+    type: String,  // Change from ObjectId to String
+    ref: 'Chapter'
+  },
+  lastRead: Date,
+  progress: Number
+}],
 
   // Quick access to continue reading
   continueReading: [{
