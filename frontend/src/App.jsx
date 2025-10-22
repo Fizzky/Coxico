@@ -1,6 +1,6 @@
 // frontend/src/App.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useParams, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import {
   BookOpen, Search, Menu, X, User, Eye, Star, ArrowLeft, ArrowRight,
   ChevronLeft, ChevronRight, LogIn, UserPlus, Heart, History, LogOut, SlidersHorizontal,
@@ -13,6 +13,9 @@ import { AuthProvider, useAuth } from './components/AuthContext';
 import './styles/netflix-theme.css';
 import AdminUpload from './AdminUpload.jsx';
 import AdminWithAuth from './AdminPanel.jsx';
+import ReadingHistory from './pages/ReadingHistory';
+import ImprovedProfilePage from './pages/ImprovedProfilePage';
+import EditProfilePage from './pages/EditProfilePage';
 
 axios.defaults.baseURL = 'http://localhost:5000';
 
@@ -949,12 +952,33 @@ const MangaDetailPage = () => {
 const ChapterReaderPage = () => {
   const { mangaId, chapterNumber } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, updateReadingProgress } = useAuth();
   const [data, setData] = useState(null);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get('page');
+    return pageParam ? parseInt(pageParam, 10) - 1 : 0;
+  });
   const [loading, setLoading] = useState(true);
   const [startTime, setStartTime] = useState(Date.now());
   const [lastProgressUpdate, setLastProgressUpdate] = useState(0);
+
+  // ADD THESE DEBUG LOGS RIGHT AFTER THE HOOKS
+  console.log('🎬 ChapterReaderPage loaded');
+  console.log('🎬 mangaId:', mangaId);
+  console.log('🎬 chapterNumber:', chapterNumber);
+  console.log('🎬 isAuthenticated:', isAuthenticated());
+  console.log('🎬 updateReadingProgress exists?', typeof updateReadingProgress);
+
+  // Sync currentPage with URL parameter
+  useEffect(() => {
+    const pageParam = searchParams.get('page');
+    if (pageParam) {
+      const pageNumber = parseInt(pageParam, 10) - 1;
+      console.log('📖 URL has page parameter:', pageParam, '→ Setting currentPage to:', pageNumber);
+      setCurrentPage(pageNumber);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchChapter = async () => {
@@ -962,13 +986,20 @@ const ChapterReaderPage = () => {
         const response = await axios.get(`/api/chapters/manga/${mangaId}/chapter/${chapterNumber}`);
         setData(response.data);
         
-        // Check if we should go to last page
-        const shouldGoToLastPage = sessionStorage.getItem('goToLastPage') === 'true';
-        if (shouldGoToLastPage) {
-          sessionStorage.removeItem('goToLastPage');
-          setCurrentPage(response.data.chapter.pages.length - 1);
+        // Check if URL has a page parameter - if so, dont reset currentPage
+        const urlPageParam = searchParams.get('page');
+        if (urlPageParam) {
+          console.log('⏭️ URL has page param, keeping current page');
+          // Dont reset - the useEffect watching searchParams will handle it
         } else {
-          setCurrentPage(0);
+          // Check if we should go to last page
+          const shouldGoToLastPage = sessionStorage.getItem('goToLastPage') === 'true';
+          if (shouldGoToLastPage) {
+            sessionStorage.removeItem('goToLastPage');
+            setCurrentPage(response.data.chapter.pages.length - 1);
+          } else {
+            setCurrentPage(0);
+          }
         }
       } catch (error) {
         console.error('Error fetching chapter:', error);
@@ -983,6 +1014,11 @@ const ChapterReaderPage = () => {
 
   // Auto-save reading progress every 30 seconds or when page changes significantly
   useEffect(() => {
+    console.log('🔄 Progress tracking useEffect triggered');
+  console.log('🔄 data exists?', !!data);
+  console.log('🔄 isAuthenticated?', isAuthenticated());
+  console.log('🔄 currentPage:', currentPage);
+  
     if (!data || !isAuthenticated()) return;
 
     const saveProgress = async () => {
@@ -2047,16 +2083,6 @@ const Stat = ({label, value, className}) => (
   </div>
 );
 
-// ---------------------- Reading History placeholder ----------------------
-const ReadingHistoryPage = () => (
-  <div className="min-h-screen bg-gray-50 py-12">
-    <div className="max-w-7xl mx-auto px-4">
-      <h1 className="text-3xl font-bold mb-8">Reading History</h1>
-      <p>Reading history feature coming soon...</p>
-    </div>
-  </div>
-);
-
 // ---------------------- Login/Signup (Netflix Style) ----------------------
 const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
@@ -2150,9 +2176,9 @@ const Login = () => {
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-medium text-white/70 hover:text-white transition-colors">
-                  Forgot password?
-                </a>
+                <Link to="/forgot-password" className="font-medium text-white/70 hover:text-white transition-colors">
+  Forgot password?
+</Link>
               </div>
             </div>
 
@@ -3339,6 +3365,197 @@ const LatestPage = () => {
   );
 };
 
+// ---------------------- Forgot Password Page ----------------------
+const ForgotPasswordPage = () => {
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      await axios.post('/api/auth/forgot-password', { email });
+      setMessage('If that email exists, a reset link has been sent. Check your inbox!');
+    } catch (error) {
+      setMessage(error.response?.data?.message || 'Error sending reset link');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#141414] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="absolute inset-0 bg-gradient-to-br from-[#141414] via-[#1a1a1a] to-[#0a0a0a]"></div>
+      
+      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-[#e50914] mb-2">MANGAREAD</h1>
+          <h2 className="text-3xl font-bold text-white mb-2">Reset Password</h2>
+          <p className="text-white/70">
+            Enter your email to receive a password reset link
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
+        <div className="bg-black/60 backdrop-blur-md py-8 px-8 shadow-2xl rounded-lg border border-white/10">
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            {message && (
+              <div className={`px-4 py-3 rounded-md text-sm ${
+                message.includes('sent') 
+                  ? 'bg-green-500/10 border border-green-500/20 text-green-400'
+                  : 'bg-[#e50914]/10 border border-[#e50914]/20 text-[#e50914]'
+              }`}>
+                {message}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
+                Email address
+              </label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent transition-all"
+                placeholder="Enter your email"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#e50914] hover:bg-[#b20710] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#e50914] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+
+            <div className="text-center">
+              <Link to="/login" className="text-sm text-white/70 hover:text-white transition-colors">
+                Back to Sign In
+              </Link>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------- Reset Password Page ----------------------
+const ResetPasswordPage = () => {
+  const { token } = useParams();
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({ password: '', confirmPassword: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      await axios.post(`/api/auth/reset-password/${token}`, {
+        password: formData.password,
+      });
+      setSuccess(true);
+      setTimeout(() => navigate('/login'), 3000);
+    } catch (error) {
+      setError(error.response?.data?.message || 'Error resetting password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="min-h-screen bg-[#141414] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-green-500 text-6xl mb-4">✓</div>
+          <h2 className="text-2xl font-bold text-white mb-2">Password Reset Successful!</h2>
+          <p className="text-white/70">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#141414] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <h1 className="text-4xl font-bold text-[#e50914] text-center mb-2">MANGAREAD</h1>
+        <h2 className="text-3xl font-bold text-white text-center">Reset Password</h2>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-black/60 backdrop-blur-md py-8 px-8 shadow-2xl rounded-lg border border-white/10">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-[#e50914]/10 border border-[#e50914]/20 text-[#e50914] px-4 py-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">
+                New Password
+              </label>
+              <input
+                type="password"
+                required
+                minLength="6"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-white mb-2">
+                Confirm Password
+              </label>
+              <input
+                type="password"
+                required
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-md text-white"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 bg-[#e50914] hover:bg-[#b20710] text-white rounded-md disabled:opacity-50"
+            >
+              {loading ? 'Resetting...' : 'Reset Password'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ---------------------- App ----------------------
 function App() {
   return (
@@ -3357,10 +3574,14 @@ function App() {
   <Route path="/search" element={<SearchPage />} />
   <Route path="/login" element={<Login />} />
   <Route path="/signup" element={<Signup />} />
-  <Route path="/profile" element={<ProfilePage />} />
+  <Route path="/profile" element={<ImprovedProfilePage />} />
   <Route path="/favorites" element={<FavoritesPage />} />
-  <Route path="/reading-history" element={<ReadingHistoryPage />} />
+  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+  <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+  <Route path="/reading-history" element={<ReadingHistory />} />
+  <Route path="/edit-profile" element={<EditProfilePage />} />
   
+
   {/* Add these two admin routes */}
   <Route path="/admin" element={<AdminWithAuth />} />
   <Route 
