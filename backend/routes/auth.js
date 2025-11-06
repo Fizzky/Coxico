@@ -14,6 +14,24 @@ import Chapter from '../models/Chapter.js';  // ⭐ ADD THIS LINE
 import multer from 'multer';
 import { S3Client } from '@aws-sdk/client-s3';
 import multerS3 from 'multer-s3';
+import Rating from '../models/Rating.js';
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (token == null) {
+    return res.status(401).json({ message: 'Access token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
 
 console.log('🪣 AWS Bucket Name:', process.env.AWS_BUCKET_NAME);
 console.log('🔑 AWS Access Key:', process.env.AWS_ACCESS_KEY_ID ? 'Present' : 'Missing');
@@ -713,7 +731,11 @@ router.get('/continue-reading', async (req, res) => {
       (user.continueReading || []).map(async (item) => {
         try {
           const manga = await Manga.findById(item.manga);
-          const chapter = item.chapter ? await Chapter.findById(item.chapter) : null;
+          const chapter = item.chapterNumber ? 
+  await Chapter.findOne({ 
+    mangaId: item.manga, 
+    chapterNumber: item.chapterNumber 
+  }) : null;
           
           if (!manga) return null; // Skip if manga not found
           
@@ -839,6 +861,101 @@ router.post('/reset-password/:token', async (req, res) => {
   } catch (error) {
     console.error('Reset password error:', error);
     res.status(500).json({ message: 'Error resetting password' });
+  }
+});
+
+// GET /api/auth/ratings/:mangaId - Get rating stats for a manga
+router.get('/ratings/:mangaId', async (req, res) => {
+  try {
+    const { mangaId } = req.params;
+    
+    const stats = await Rating.aggregate([
+      { $match: { manga: mangaId } },
+      {
+        $group: {
+          _id: null,
+          averageRating: { $avg: '$rating' },
+          totalRatings: { $sum: 1 },
+          breakdown: {
+            $push: '$rating'
+          }
+        }
+      }
+    ]);
+
+    if (stats.length === 0) {
+      return res.json({
+        averageRating: 0,
+        totalRatings: 0,
+        breakdown: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+      });
+    }
+
+    const data = stats[0];
+    
+    // Count each star rating
+    const breakdown = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    data.breakdown.forEach(rating => {
+      breakdown[rating] = (breakdown[rating] || 0) + 1;
+    });
+
+    res.json({
+      averageRating: Math.round(data.averageRating * 10) / 10, // 4.3 stars
+      totalRatings: data.totalRatings,
+      breakdown
+    });
+  } catch (error) {
+    console.error('Get ratings error:', error);
+    res.status(500).json({ message: 'Error fetching ratings' });
+  }
+});
+
+// POST /api/auth/rate - Add/update a rating
+router.post('/rate', authenticateToken, async (req, res) => {
+  try {
+    const { mangaId, rating } = req.body;
+    const userId = req.user.userId;
+
+    if (!mangaId || !rating) {
+      return res.status(400).json({ message: 'Manga ID and rating are required' });
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({ message: 'Rating must be between 1 and 5' });
+    }
+
+    // Upsert rating (update if exists, create if not)
+    await Rating.findOneAndUpdate(
+      { user: userId, manga: mangaId },
+      { rating },
+      { upsert: true, new: true }
+    );
+
+    res.json({
+      success: true,
+      message: 'Rating saved successfully',
+      userRating: rating
+    });
+  } catch (error) {
+    console.error('Add rating error:', error);
+    res.status(500).json({ message: 'Error saving rating' });
+  }
+});
+
+// GET /api/auth/user-rating/:mangaId - Get user's rating for a manga
+router.get('/user-rating/:mangaId', authenticateToken, async (req, res) => {
+  try {
+    const { mangaId } = req.params;
+    const userId = req.user.userId;
+
+    const userRating = await Rating.findOne({ user: userId, manga: mangaId });
+    
+    res.json({
+      userRating: userRating ? userRating.rating : null
+    });
+  } catch (error) {
+    console.error('Get user rating error:', error);
+    res.status(500).json({ message: 'Error fetching user rating' });
   }
 });
 

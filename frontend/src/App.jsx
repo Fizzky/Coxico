@@ -550,7 +550,10 @@ const MangaCard = ({ manga }) => {
             <div className="flex items-center justify-between text-sm text-gray-500">
               <div className="flex items-center">
                 <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                <span>{manga.rating}/10</span>
+                <div><span className="text-white/60">Artist:</span> {manga.artist || '—'}</div>
+<div className="flex items-center">
+  <StarRating mangaId={manga._id} currentUser={user} />
+</div>
               </div>
               <div className="flex items-center">
                 <Eye className="h-4 w-4 mr-1" />
@@ -576,8 +579,33 @@ const MangaCard = ({ manga }) => {
   );
 };
 
+// Add this component before your HomePage component
+const DisplayRatingWithData = ({ mangaId }) => {
+  const [averageRating, setAverageRating] = useState(0);
+  const [totalRatings, setTotalRatings] = useState(0);
+
+  useEffect(() => {
+    const fetchRatings = async () => {
+      try {
+        const response = await axios.get(`/api/auth/ratings/${mangaId}`);
+        setAverageRating(response.data.averageRating);
+        setTotalRatings(response.data.totalRatings);
+      } catch (error) {
+        console.error('Error fetching ratings:', error);
+      }
+    };
+
+    if (mangaId) {
+      fetchRatings();
+    }
+  }, [mangaId]);
+
+  return <DisplayRating averageRating={averageRating} totalRatings={totalRatings} />;
+};
+
 // ---------------------- Home (billboard + rows) ----------------------
 const HomePage = () => {
+  const { user } = useAuth(); // ADD THIS LINE
   const [manga, setManga] = useState([]);
   const [featuredManga, setFeaturedManga] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -705,6 +733,8 @@ const HomePage = () => {
             <span>{(featuredManga?.views || 0).toLocaleString()} views</span>
             <span>{featuredManga?.status || '—'}</span>
           </div>
+
+          <DisplayRatingWithData mangaId={featuredManga._id} />
           <div className="billboard-buttons">
             {featuredManga && (
               <>
@@ -725,11 +755,126 @@ const HomePage = () => {
   );
 };
 
+// ---------------------- Display-Only Rating Component (for homepage) ----------------------
+const DisplayRating = ({ averageRating, totalRatings }) => {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '20px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '2px' }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <span
+            key={star}
+            style={{
+              fontSize: '20px',
+              color: star <= (averageRating || 0) ? '#ffc107' : '#6c757d'
+            }}
+          >
+            ★
+          </span>
+        ))}
+      </div>
+      <span style={{ color: 'white', fontSize: '16px' }}>
+        {(averageRating || 0).toFixed(1)} ({totalRatings || 0} ratings)
+      </span>
+    </div>
+  );
+};
+
+// ---------------------- Interactive Star Rating Component (for manga detail page) ----------------------
+const StarRating = ({ mangaId, currentUser }) => {
+  const [averageRating, setAverageRating] = useState(0);
+  const [totalRatings, setTotalRatings] = useState(0);
+  const [userRating, setUserRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+
+  useEffect(() => {
+    fetchRatings();
+    if (currentUser) {
+      fetchUserRating();
+    }
+  }, [mangaId, currentUser]);
+
+  const fetchRatings = async () => {
+    try {
+      const response = await axios.get(`/api/auth/ratings/${mangaId}`);
+      setAverageRating(response.data.averageRating);
+      setTotalRatings(response.data.totalRatings);
+    } catch (error) {
+      console.error('Error fetching ratings:', error);
+    }
+  };
+
+  const fetchUserRating = async () => {
+    try {
+      const response = await axios.get(`/api/auth/user-rating/${mangaId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setUserRating(response.data.userRating || 0);
+    } catch (error) {
+      console.error('Error fetching user rating:', error);
+    }
+  };
+
+  const submitRating = async (rating) => {
+    if (!currentUser) {
+      alert('Please login to rate this manga');
+      return;
+    }
+
+    try {
+      await axios.post('/api/auth/rate', 
+        { mangaId, rating },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }}
+      );
+      
+      setUserRating(rating);
+      fetchRatings(); // Refresh average
+    } catch (error) {
+      console.error('Error submitting rating:', error);
+    }
+  };
+
+  return (
+  <div>
+    {/* Single Interactive Rating Display */}
+    <div className="flex items-center" style={{ gap: '8px' }}>
+      <div style={{ display: 'flex', gap: '1px' }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <span
+            key={star}
+            onClick={currentUser ? () => submitRating(star) : undefined}
+            onMouseEnter={currentUser ? () => setHoverRating(star) : undefined}
+            onMouseLeave={currentUser ? () => setHoverRating(0) : undefined}
+            style={{
+              fontSize: '18px',
+              color: star <= (hoverRating || userRating || averageRating) ? '#ffc107' : '#6c757d',
+              cursor: currentUser ? 'pointer' : 'default',
+              transition: 'color 0.2s'
+            }}
+          >
+            ★
+          </span>
+        ))}
+      </div>
+      <span style={{ color: 'white', fontSize: '14px' }}>
+        {averageRating.toFixed(1)} ({totalRatings} ratings)
+      </span>
+    </div>
+    
+    {/* Show current user rating if they've rated */}
+    {currentUser && userRating > 0 && (
+      <div style={{ color: '#ffc107', fontSize: '12px', marginTop: '4px' }}>
+        You rated: {userRating} star{userRating !== 1 ? 's' : ''}
+      </div>
+    )}
+  </div>
+);
+};
+
 // ---------------------- Manga Detail (dark hero) ----------------------
 const MangaDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, isFavorite, toggleFavorite } = useAuth();
+  const { user, isAuthenticated, isFavorite, toggleFavorite } = useAuth();
 
   const [manga, setManga] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -810,16 +955,30 @@ const MangaDetailPage = () => {
           </div>
 
           <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {(manga.genres || []).slice(0, 6).map((g) => (
-              <span key={g} className="px-2 py-1 text-xs rounded bg-white/10">{g}</span>
-            ))}
-          </div>
+  {(manga.genres || []).slice(0, 6).map((g) => (
+    <span key={g} className="px-2 py-1 text-xs rounded bg-white/10">{g}</span>
+  ))}
+</div>
 
-          <div className="billboard-buttons">
+<div className="billboard-buttons">
   {firstChapter && (
-    <Link to={`/manga/${manga._id}/chapter/${firstChapter.chapterNumber}`} className="btn btn-play">
-      ▶ Read Chapter {firstChapter.chapterNumber}
-    </Link>
+    <button 
+  onClick={async () => {
+    // Track view BEFORE navigating
+    try {
+      await axios.post(`/api/manga/${manga._id}/view`);
+      console.log('View tracked for:', manga._id);
+    } catch (error) {
+      console.error('Error tracking view:', error);
+    }
+    
+    // Then navigate to chapter reader
+    navigate(`/manga/${manga._id}/chapter/${firstChapter.chapterNumber}`);
+  }} 
+  className="btn btn-play"
+>
+  ▶ Read Chapter {firstChapter.chapterNumber}
+</button>
   )}
   <button onClick={handleFavorite} className="btn btn-info" disabled={favLoading}>
   {favLoading ? (
@@ -843,16 +1002,15 @@ const MangaDetailPage = () => {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4 text-sm text-white/80">
-              <div><span className="text-white/60">Author:</span> {manga.author || '—'}</div>
-              <div><span className="text-white/60">Artist:</span> {manga.artist || '—'}</div>
-              <div className="flex items-center">
-                <Star className="h-4 w-4 text-yellow-400 mr-1" />
-                <span>{manga.rating}/10</span>
-              </div>
-              <div className="flex items-center">
-                <Eye className="h-4 w-4 mr-1" />
-                <span>{(manga.views || 0).toLocaleString()} views</span>
-              </div>
+              <div><span className="text-white/60">Author:</span> Unknown Author</div>
+<div><span className="text-white/60">Artist:</span> Unknown Artist</div>
+<div>
+  <StarRating mangaId={manga._id} currentUser={user} />
+</div>
+<div className="flex items-center">
+  <Eye className="h-4 w-4 mr-1" />
+  <span>6,423 views</span>
+</div>
             </div>
           </div>
 
@@ -1347,43 +1505,30 @@ const BrowsePage = () => {
   // Fetch all manga
 useEffect(() => {
   const fetchManga = async () => {
-    try {
-      const response = await axios.get('/api/manga');
-      const mangaList = response.data.manga || [];
-      
-      // DEBUG: Check what IDs we're getting
-      console.log('=== MANGA DEBUG START ===');
-      console.log('Total manga received:', mangaList.length);
-      console.log('');
-      
-      if (mangaList.length > 0) {
-        console.log('Manga ID Details:');
-        mangaList.forEach(m => {
-          console.log(`  Title: "${m.title}"`);
-          console.log(`  ID: "${m._id}"`);
-          console.log(`  ID Type: ${typeof m._id}`);
-          console.log(`  ID Length: ${m._id ? m._id.length : 0}`);
-          console.log('  ---');
-        });
-      } else {
-        console.log('No manga found in response!');
-      }
-      
-      console.log('=== MANGA DEBUG END ===');
-      console.log('');
-      
-      setManga(mangaList);
-    } catch (error) {
-      console.error('Error fetching manga:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
-    } finally {
-      setLoading(false);
+  try {
+    const response = await axios.get('/api/manga');
+    const mangaList = response.data.manga || [];
+    setManga(mangaList);
+
+    if (mangaList.length > 0) {
+      // Find manga with the most recent chapter upload
+      const mangaWithLatestChapter = mangaList
+        .filter(manga => manga.chapters && manga.chapters.length > 0) // Only manga with chapters
+        .sort((a, b) => {
+          // Get the most recent chapter date for each manga
+          const latestA = Math.max(...a.chapters.map(ch => new Date(ch.createdAt || ch.uploadDate)));
+          const latestB = Math.max(...b.chapters.map(ch => new Date(ch.createdAt || ch.uploadDate)));
+          return latestB - latestA; // Most recent first
+        })[0]; // Take the first (most recent)
+
+      setFeaturedManga(mangaWithLatestChapter || mangaList[0]); // Fallback to first manga if no chapters found
     }
-  };
+  } catch (error) {
+    console.error('Error fetching manga:', error);
+  } finally {
+    setLoading(false);
+  }
+};
   fetchManga();
 }, []);
 

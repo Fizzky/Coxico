@@ -58,10 +58,9 @@ readingHistory: [{
     required: true
   },
   chapter: {
-    type: mongoose.Schema.Types.ObjectId,  // ⭐ CHANGE to ObjectId (chapters use ObjectIds)
-    ref: 'Chapter',
-    required: true
-  },
+  type: String,     // ← NEW: Changed from ObjectId to String
+  required: true
+},
   chapterNumber: {
     type: Number,
     required: true
@@ -96,10 +95,9 @@ continueReading: [{
     required: true
   },
   chapter: {
-    type: mongoose.Schema.Types.ObjectId,  // ⭐ CHANGE to ObjectId
-    ref: 'Chapter',
-    required: true
-  },
+  type: String,     // ← NEW: Changed from ObjectId to String
+  required: true
+},
   chapterNumber: {
     type: Number,
     required: true
@@ -109,6 +107,24 @@ continueReading: [{
     default: 0
   },
   lastReadAt: {
+    type: Date,
+    default: Date.now
+  }
+}],
+
+mangaRatings: [{
+  mangaId: {
+    type: String,
+    ref: 'Manga',
+    required: true
+  },
+  rating: {
+    type: Number,
+    min: 1,
+    max: 10,
+    required: true
+  },
+  ratedAt: {
     type: Date,
     default: Date.now
   }

@@ -57,6 +57,10 @@ const MangaSchema = new mongoose.Schema({
     min: 0, 
     max: 10 
   },
+  totalRatings: { 
+  type: Number, 
+  default: 0 
+  },
   views: { 
     type: Number, 
     default: 0 
@@ -77,6 +81,7 @@ const MangaSchema = new mongoose.Schema({
   chapters: [chapterSchema] // Flat chapter list for non-volume manga
 }, {
   timestamps: true
+  
 });
 
 // Text search index
