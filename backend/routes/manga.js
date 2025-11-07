@@ -6,6 +6,16 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+router.get('/with-chapters', async (req, res) => {
+  try {
+    const manga = await Manga.find(); // Include chapters and volumes
+    res.json({ manga, total: manga.length });
+  } catch (error) {
+    console.error('Error fetching manga with chapters:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get all manga
 router.get('/', async (req, res) => {
   try {

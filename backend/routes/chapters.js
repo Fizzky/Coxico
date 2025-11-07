@@ -1,6 +1,7 @@
 // backend/routes/chapters.js - MongoDB version
 import express from 'express';
 import Manga from '../models/Manga.js';
+import Chapter from '../models/Chapter.js';
 
 const router = express.Router();
 
@@ -114,6 +115,17 @@ router.get('/manga/:mangaId/chapter/:chapterNumber', async (req, res) => {
     
   } catch (error) {
     console.error('Error fetching chapter:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Add this route to backend/routes/chapters.js
+router.get('/latest', async (req, res) => {
+  try {
+    const latestChapter = await Chapter.findOne().sort({ uploadedAt: -1 }).limit(1);
+    res.json({ chapter: latestChapter });
+  } catch (error) {
+    console.error('Error fetching latest chapter:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

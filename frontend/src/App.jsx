@@ -611,25 +611,60 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+  fetchManga();
+  
+  // Auto-refresh every 30 seconds for live rotation
+  const interval = setInterval(() => {
+    console.log('🔄 Auto-refreshing featured manga...');
     fetchManga();
-  }, []);
+  }, 30 * 1000); // 30 seconds in milliseconds
+  
+  return () => clearInterval(interval); // Cleanup on unmount
+}, []);
 
   const fetchManga = async () => {
-    try {
-      const response = await axios.get('/api/manga');
-      const mangaList = response.data.manga || [];
-      setManga(mangaList);
+  try {
+    const response = await axios.get('/api/manga/with-chapters');
+    const mangaList = response.data.manga || [];
+    setManga(mangaList);
 
+    console.log('=== FEATURED MANGA DEBUG ===');
+    console.log('Total manga received:', mangaList.length);
+    
+    if (mangaList.length > 0) {
+      // Debug: Check what data we have
+      mangaList.forEach(manga => {
+        console.log(`\nManga: ${manga.title}`);
+        console.log('  Has chapters array:', manga.chapters?.length || 0);
+        console.log('  Has volumes array:', manga.volumes?.length || 0);
+        
+        if (manga.chapters && manga.chapters.length > 0) {
+          console.log('  Sample chapter uploadedAt:', manga.chapters[0].uploadedAt);
+        }
+        if (manga.volumes && manga.volumes.length > 0 && manga.volumes[0].chapters) {
+          console.log('  Sample volume chapter uploadedAt:', manga.volumes[0].chapters[0]?.uploadedAt);
+        }
+      });
+
+      // Find manga with the most recent chapter upload
       if (mangaList.length > 0) {
-        const featured = mangaList.reduce((a, b) => (a.rating > b.rating ? a : b));
-        setFeaturedManga(featured);
-      }
-    } catch (error) {
-      console.error('Error fetching manga:', error);
-    } finally {
-      setLoading(false);
+  // Rotate every 30 seconds
+const now = new Date();
+const secondsPassed = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+const thirtySecondBlocks = Math.floor(secondsPassed / 30);
+const rotationIndex = thirtySecondBlocks % mangaList.length;
+  
+  setFeaturedManga(mangaList[rotationIndex]);
+  
+  console.log(`🔄 5-min rotation: Block ${fiveMinuteBlocks}, Index ${rotationIndex}, Showing: ${mangaList[rotationIndex].title}`);
+}
     }
-  };
+  } catch (error) {
+    console.error('Error fetching manga:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const Row = ({ title, items }) => {
     const sliderRef = useRef(null);
@@ -716,35 +751,92 @@ const HomePage = () => {
       ).slice(0, 18)
     : [];
 
-  return (
-    <div className="min-h-screen bg-[#141414] text-white">
-      <section className="billboard" style={billboardStyle}>
-        <div className="billboard-content">
-          <h1 className="billboard-title">{featuredManga?.title || 'Featured'}</h1>
-          <p className="billboard-description">
-            {featuredManga?.description
-              ? (featuredManga.description.length > 220
-                  ? featuredManga.description.slice(0, 220) + '…'
-                  : featuredManga.description)
-              : 'Discover and read amazing manga stories.'}
-          </p>
-          <div className="billboard-metadata">
-            <span className="match-score">{Math.round(((featuredManga?.rating || 0) * 10))}% Match</span>
-            <span>{(featuredManga?.views || 0).toLocaleString()} views</span>
-            <span>{featuredManga?.status || '—'}</span>
-          </div>
-
-          <DisplayRatingWithData mangaId={featuredManga._id} />
-          <div className="billboard-buttons">
-            {featuredManga && (
-              <>
-                <Link to={`/manga/${featuredManga._id}`} className="btn btn-play">▶ Read</Link>
-                <Link to={`/manga/${featuredManga._id}`} className="btn btn-info">ℹ More Info</Link>
-              </>
-            )}
-          </div>
+ return (
+  <div className="min-h-screen bg-[#141414] text-white">
+    <section className="billboard" style={{ position: 'relative', overflow: 'hidden', height: '60vh', backgroundColor: '#141414' }}>
+      {/* Blurred Background Layer - Full Width */}
+      {featuredManga?.coverImage && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          zIndex: 0,
+        }}>
+          <img 
+            src={featuredManga.coverImage} 
+            alt=""
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'blur(40px) brightness(0.4)',
+              transform: 'scale(1.1)',
+            }}
+          />
+          {/* Dark gradient overlay for text readability */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(to right, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.6) 50%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.7) 100%), linear-gradient(to bottom, rgba(0,0,0,0) 0%, #141414 100%)',
+          }} />
         </div>
-      </section>
+      )}
+
+      {/* Sharp Cover Image - Right Side */}
+      {featuredManga?.coverImage && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          right: '5%',
+          transform: 'translateY(-50%)',
+          height: '85%',
+          zIndex: 1,
+        }}>
+          <img 
+            src={featuredManga.coverImage} 
+            alt={featuredManga.title}
+            style={{
+              height: '100%',
+              width: 'auto',
+              objectFit: 'contain',
+              boxShadow: '0 0 50px rgba(0,0,0,0.8)',
+            }}
+          />
+        </div>
+      )}
+      
+      {/* Content Layer - Left Side */}
+      <div className="billboard-content" style={{ position: 'relative', zIndex: 2 }}>
+        <h1 className="billboard-title">{featuredManga?.title || 'Featured'}</h1>
+        <p className="billboard-description">
+          {featuredManga?.description
+            ? (featuredManga.description.length > 220
+                ? featuredManga.description.slice(0, 220) + '…'
+                : featuredManga.description)
+            : 'Discover and read amazing manga stories.'}
+        </p>
+        <div className="billboard-metadata">
+          <span className="match-score">{Math.round(((featuredManga?.rating || 0) * 10))}% Match</span>
+          <span>{(featuredManga?.views || 0).toLocaleString()} views</span>
+          <span>{featuredManga?.status || '—'}</span>
+        </div>
+
+        <DisplayRatingWithData mangaId={featuredManga._id} />
+        <div className="billboard-buttons">
+          {featuredManga && (
+            <>
+              <Link to={`/manga/${featuredManga._id}`} className="btn btn-play">▶ Read</Link>
+              <Link to={`/manga/${featuredManga._id}`} className="btn btn-info">ℹ More Info</Link>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
 
       <Row title="Latest Manga" items={latest} />
       <Row title="Trending Now" items={trending} />
@@ -1512,16 +1604,17 @@ useEffect(() => {
 
     if (mangaList.length > 0) {
       // Find manga with the most recent chapter upload
-      const mangaWithLatestChapter = mangaList
-        .filter(manga => manga.chapters && manga.chapters.length > 0) // Only manga with chapters
-        .sort((a, b) => {
-          // Get the most recent chapter date for each manga
-          const latestA = Math.max(...a.chapters.map(ch => new Date(ch.createdAt || ch.uploadDate)));
-          const latestB = Math.max(...b.chapters.map(ch => new Date(ch.createdAt || ch.uploadDate)));
-          return latestB - latestA; // Most recent first
-        })[0]; // Take the first (most recent)
-
-      setFeaturedManga(mangaWithLatestChapter || mangaList[0]); // Fallback to first manga if no chapters found
+      if (mangaList.length > 0) {
+  // Rotate every 30 seconds
+const now = new Date();
+const secondsPassed = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+const thirtySecondBlocks = Math.floor(secondsPassed / 30);
+const rotationIndex = thirtySecondBlocks % mangaList.length;
+  
+  setFeaturedManga(mangaList[rotationIndex]);
+  
+  console.log(`🔄 5-min rotation: Block ${fiveMinuteBlocks}, showing manga ${rotationIndex}: ${mangaList[rotationIndex].title}`);
+} // Fallback to first manga if no chapters found
     }
   } catch (error) {
     console.error('Error fetching manga:', error);

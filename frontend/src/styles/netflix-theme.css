@@ -51,15 +51,12 @@ body.search-open { overflow: hidden; }
   display: flex; align-items: center; padding: 0 50px;
 }
 .billboard-content { max-width: 500px; margin-top: 100px; }
-.billboard-title { font-size: 60px; font-weight: 800; margin-bottom: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
-.billboard-description { font-size: 20px; line-height: 1.4; margin-bottom: 20px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-.billboard-metadata { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; font-size: 16px; }
+.billboard-title { font-size: 3rem; font-weight: 800; margin-bottom: 1rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+.billboard-description { font-size: 1rem; line-height: 1.4; margin-bottom: 1rem; max-width: 500px; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+.billboard-metadata { display: flex; align-items: center; gap: 15px; margin-bottom: 1.5rem; font-size: 0.9rem; }
 .match-score { color: #46d369; font-weight: bold; }
 .billboard-buttons { display: flex; gap: 10px; }
-.btn {
-  padding: 10px 24px; border: none; border-radius: 4px; font-size: 16px; font-weight: 600;
-  cursor: pointer; display: flex; align-items: center; gap: 10px; transition: opacity 0.2s ease;
-}
+.btn { padding: 0.6rem 1.5rem; border: none; border-radius: 4px; font-size: 0.95rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: opacity 0.2s ease; }
 .btn:hover { opacity: 0.8; }
 .btn-play { background: #fff; color: #000; }
 .btn-info { background: rgba(109, 109, 110, 0.7); color: #fff; }
