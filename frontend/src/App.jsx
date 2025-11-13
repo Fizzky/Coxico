@@ -603,11 +603,24 @@ const DisplayRatingWithData = ({ mangaId }) => {
   return <DisplayRating averageRating={averageRating} totalRatings={totalRatings} />;
 };
 
+// Helper function to calculate time ago
+const getTimeAgo = (date) => {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds < 2592000) return `${Math.floor(seconds / 604800)}w ago`;
+  return `${Math.floor(seconds / 2592000)}mo ago`;
+};
+
 // ---------------------- Home (billboard + rows) ----------------------
 const HomePage = () => {
   const { user } = useAuth(); // ADD THIS LINE
   const [manga, setManga] = useState([]);
   const [featuredManga, setFeaturedManga] = useState(null);
+  const [isFading, setIsFading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -654,9 +667,13 @@ const secondsPassed = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSec
 const thirtySecondBlocks = Math.floor(secondsPassed / 30);
 const rotationIndex = thirtySecondBlocks % mangaList.length;
   
+  // Trigger fade out, then change manga, then fade in
+setTimeout(() => {
   setFeaturedManga(mangaList[rotationIndex]);
+  setIsFading(false);
+}, 300); // 300ms fade out duration
   
-  console.log(`🔄 5-min rotation: Block ${fiveMinuteBlocks}, Index ${rotationIndex}, Showing: ${mangaList[rotationIndex].title}`);
+  console.log(`🔄 30-sec rotation: Block ${thirtySecondBlocks}, Index ${rotationIndex}, Showing: ${mangaList[rotationIndex].title}`);
 }
     }
   } catch (error) {
@@ -753,7 +770,7 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
 
  return (
   <div className="min-h-screen bg-[#141414] text-white">
-    <section className="billboard" style={{ position: 'relative', overflow: 'hidden', height: '60vh', backgroundColor: '#141414' }}>
+    <section className="billboard" style={{ position: 'relative', overflow: 'hidden', height: '60vh', backgroundColor: '#141414', opacity: isFading ? 0 : 1, transition: 'opacity 0.5s ease-in-out' }}>
       {/* Blurred Background Layer - Full Width */}
       {featuredManga?.coverImage && (
         <div style={{
@@ -791,7 +808,7 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
       {featuredManga?.coverImage && (
         <div style={{
           position: 'absolute',
-          top: '50%',
+          top: '55%',
           right: '5%',
           transform: 'translateY(-50%)',
           height: '85%',
@@ -826,7 +843,7 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
           <span>{featuredManga?.status || '—'}</span>
         </div>
 
-        <DisplayRatingWithData mangaId={featuredManga._id} />
+        {featuredManga && <DisplayRatingWithData mangaId={featuredManga._id} />}
         <div className="billboard-buttons">
           {featuredManga && (
             <>
@@ -838,8 +855,9 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
       </div>
     </section>
 
+    <Row title="🔥 Hot Manga" items={trending.slice(0, 12)} />
+
       <Row title="Latest Manga" items={latest} />
-      <Row title="Trending Now" items={trending} />
       {becauseYouLiked.length > 0 && (
         <Row title={`Because You Liked ${featuredManga?.title}`} items={becauseYouLiked} />
       )}
@@ -972,24 +990,34 @@ const MangaDetailPage = () => {
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [favLoading, setFavLoading] = useState(false);
-
+  const hasFetched = useRef(false);
+  
   useEffect(() => {
-    const fetchMangaDetail = async () => {
-      try {
-        const response = await axios.get(`/api/manga/${id}`);
-        setManga(response.data.manga);
-        setChapters(response.data.chapters || []);
+  // Prevent double-fetch in React Strict Mode
+  if (hasFetched.current) return;
+  hasFetched.current = true;
 
-        console.log('Manga object:', response.data.manga);
-        
-      } catch (error) {
-        console.error('Error fetching manga detail:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMangaDetail();
-  }, [id]);
+  const fetchMangaDetail = async () => {
+    try {
+      const response = await axios.get(`/api/manga/${id}`);
+      setManga(response.data.manga);
+      setChapters(response.data.chapters || []);
+
+      console.log('Manga object:', response.data.manga);
+      
+    } catch (error) {
+      console.error('Error fetching manga detail:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchMangaDetail();
+  
+  // Reset when id changes
+  return () => {
+    hasFetched.current = false;
+  };
+}, [id]);
 
   const handleFavorite = async () => {
     if (!isAuthenticated()) {
@@ -1056,6 +1084,7 @@ const MangaDetailPage = () => {
   {firstChapter && (
     <button 
   onClick={async () => {
+    const firstChapterLabel = firstChapter.chapterNumberLabel || firstChapter.chapterNumber;
     // Track view BEFORE navigating
     try {
       await axios.post(`/api/manga/${manga._id}/view`);
@@ -1065,11 +1094,11 @@ const MangaDetailPage = () => {
     }
     
     // Then navigate to chapter reader
-    navigate(`/manga/${manga._id}/chapter/${firstChapter.chapterNumber}`);
+    navigate(`/manga/${manga._id}/chapter/${firstChapterLabel}`);
   }} 
   className="btn btn-play"
 >
-  ▶ Read Chapter {firstChapter.chapterNumber}
+  ▶ Read Chapter {firstChapter.chapterNumberLabel || firstChapter.chapterNumber}
 </button>
   )}
   <button onClick={handleFavorite} className="btn btn-info" disabled={favLoading}>
@@ -1135,10 +1164,12 @@ const MangaDetailPage = () => {
                 {volume.volumeTitle} ({volume.chapters.length} chapters)
               </h3>
             </div>
-            {volume.chapters.map((chapter, idx) => (
+            {volume.chapters.map((chapter, idx) => {
+              const chapterLabel = chapter.chapterNumberLabel || chapter.chapterNumber;
+              return (
               <Link
                 key={chapter._id}
-                to={`/manga/${manga._id}/chapter/${chapter.chapterNumber}`}
+                to={`/manga/${manga._id}/chapter/${chapterLabel}`}
                 className={`block px-6 py-4 text-white/90 hover:bg-white/10 transition-colors ${
                   idx !== volume.chapters.length - 1 ? 'border-b border-white/10' : ''
                 }`}
@@ -1146,7 +1177,7 @@ const MangaDetailPage = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium">
-                      Chapter {chapter.chapterNumber}: {chapter.title}
+                      Chapter {chapterLabel}: {chapter.title}
                     </div>
                     <div className="text-xs text-white/60">
                       {new Date(chapter.uploadedAt).toLocaleDateString()}
@@ -1158,16 +1189,18 @@ const MangaDetailPage = () => {
                   </div>
                 </div>
               </Link>
-            ))}
+            )})}
           </div>
         ))
       ) : (
         // Display flat structure (no volumes)
         <div className="bg-white/5 border border-white/10 rounded-lg overflow-hidden">
-          {chapters.map((chapter, idx) => (
+          {chapters.map((chapter, idx) => {
+            const chapterLabel = chapter.chapterNumberLabel || chapter.chapterNumber;
+            return (
             <Link
               key={chapter._id}
-              to={`/manga/${manga._id}/chapter/${chapter.chapterNumber}`}
+              to={`/manga/${manga._id}/chapter/${chapterLabel}`}
               className={`block px-6 py-4 text-white/90 hover:bg-white/10 transition-colors ${
                 idx !== chapters.length - 1 ? 'border-b border-white/10' : ''
               }`}
@@ -1175,7 +1208,7 @@ const MangaDetailPage = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-medium">
-                    Chapter {chapter.chapterNumber}: {chapter.title}
+                    Chapter {chapterLabel}: {chapter.title}
                   </div>
                   <div className="text-xs text-white/60">
                     {new Date(chapter.uploadedAt).toLocaleDateString()}
@@ -1187,7 +1220,7 @@ const MangaDetailPage = () => {
                 </div>
               </div>
             </Link>
-          ))}
+          )})}
         </div>
       )}
     </div>
@@ -1213,6 +1246,24 @@ const ChapterReaderPage = () => {
   const [startTime, setStartTime] = useState(Date.now());
   const [lastProgressUpdate, setLastProgressUpdate] = useState(0);
 
+  const getChapterLabel = (chapter) => {
+    if (!chapter) return '';
+    if (chapter.chapterNumberLabel) return chapter.chapterNumberLabel;
+    if (chapter.chapterNumber === 0) return '0';
+    return chapter.chapterNumber != null ? chapter.chapterNumber.toString() : '';
+  };
+
+  const findChapterIndex = (chapterList, targetChapter) => {
+    if (!chapterList || !targetChapter) return -1;
+    return chapterList.findIndex((ch) => {
+      const label = getChapterLabel(ch);
+      if (label === targetChapter) return true;
+      const numeric = ch.chapterNumber;
+      const targetNumeric = Number(targetChapter);
+      return numeric != null && !Number.isNaN(targetNumeric) && Number(numeric) === targetNumeric;
+    });
+  };
+
   // ADD THESE DEBUG LOGS RIGHT AFTER THE HOOKS
   console.log('🎬 ChapterReaderPage loaded');
   console.log('🎬 mangaId:', mangaId);
@@ -1232,6 +1283,7 @@ const ChapterReaderPage = () => {
 
   useEffect(() => {
     const fetchChapter = async () => {
+      setLoading(true);
       try {
         const response = await axios.get(`/api/chapters/manga/${mangaId}/chapter/${chapterNumber}`);
         setData(response.data);
@@ -1253,6 +1305,7 @@ const ChapterReaderPage = () => {
         }
       } catch (error) {
         console.error('Error fetching chapter:', error);
+        setData(null);
       } finally {
         setLoading(false);
       }
@@ -1283,7 +1336,8 @@ const ChapterReaderPage = () => {
           data.chapter.chapterNumber,
           currentPage,
           data.chapter.pages.length,
-          Math.floor((now - startTime) / 1000)
+          Math.floor((now - startTime) / 1000),
+          getChapterLabel(data.chapter)
         );
         setLastProgressUpdate(currentPage);
         setStartTime(now); // Reset timer
@@ -1313,7 +1367,8 @@ const ChapterReaderPage = () => {
             data.chapter.chapterNumber,
             currentPage,
             data.chapter.pages.length,
-            readingTime
+            readingTime,
+            getChapterLabel(data.chapter)
           );
         }
       }
@@ -1348,7 +1403,8 @@ const ChapterReaderPage = () => {
           data.chapter.chapterNumber,
           currentPage,
           data.chapter.pages.length,
-          Math.floor((Date.now() - startTime) / 1000)
+          Math.floor((Date.now() - startTime) / 1000),
+          getChapterLabel(data.chapter)
         );
       }
       nextChapter();
@@ -1364,40 +1420,37 @@ const ChapterReaderPage = () => {
   };
 
   const nextChapter = () => {
-    if (data) {
-      const currentIndex = data.allChapters.findIndex(
-        ch => ch.chapterNumber === parseInt(chapterNumber)
-      );
-      if (currentIndex < data.allChapters.length - 1) {
+    if (data && data.allChapters) {
+      const currentIndex = findChapterIndex(data.allChapters, chapterNumber);
+      if (currentIndex !== -1 && currentIndex < data.allChapters.length - 1) {
         const nextCh = data.allChapters[currentIndex + 1];
+        const nextLabel = getChapterLabel(nextCh);
         setCurrentPage(0);
-        navigate(`/manga/${mangaId}/chapter/${nextCh.chapterNumber}`);
+        navigate(`/manga/${mangaId}/chapter/${nextLabel}`);
       }
     }
   };
 
   const prevChapterToLastPage = () => {
-    if (data) {
-      const currentIndex = data.allChapters.findIndex(
-        ch => ch.chapterNumber === parseInt(chapterNumber)
-      );
+    if (data && data.allChapters) {
+      const currentIndex = findChapterIndex(data.allChapters, chapterNumber);
       if (currentIndex > 0) {
         const prevCh = data.allChapters[currentIndex - 1];
+        const prevLabel = getChapterLabel(prevCh);
         sessionStorage.setItem('goToLastPage', 'true');
-        navigate(`/manga/${mangaId}/chapter/${prevCh.chapterNumber}`);
+        navigate(`/manga/${mangaId}/chapter/${prevLabel}`);
       }
     }
   };
 
   const prevChapter = () => {
-    if (data) {
-      const currentIndex = data.allChapters.findIndex(
-        ch => ch.chapterNumber === parseInt(chapterNumber)
-      );
+    if (data && data.allChapters) {
+      const currentIndex = findChapterIndex(data.allChapters, chapterNumber);
       if (currentIndex > 0) {
         const prevCh = data.allChapters[currentIndex - 1];
+        const prevLabel = getChapterLabel(prevCh);
         setCurrentPage(0);
-        navigate(`/manga/${mangaId}/chapter/${prevCh.chapterNumber}`);
+        navigate(`/manga/${mangaId}/chapter/${prevLabel}`);
       }
     }
   };
@@ -1429,6 +1482,11 @@ const ChapterReaderPage = () => {
     );
   }
 
+  const currentChapterLabel = getChapterLabel(data.chapter);
+  const currentChapterIndex = data.allChapters ? findChapterIndex(data.allChapters, chapterNumber) : -1;
+  const isFirstChapter = !data.allChapters || currentChapterIndex <= 0;
+  const isLastChapter = !data.allChapters || currentChapterIndex === data.allChapters.length - 1;
+
   return (
     <div className="min-h-screen bg-black text-white overflow-hidden">
       {/* Chapter Navigation Header */}
@@ -1451,7 +1509,7 @@ const ChapterReaderPage = () => {
             Back to {data.manga.title}
           </button>
           <h1 className="text-lg font-semibold">
-            Chapter {data.chapter.chapterNumber}: {data.chapter.title}
+            Chapter {currentChapterLabel}: {data.chapter.title}
           </h1>
           <div className="text-sm text-gray-400">
             Page {currentPage + 1} of {data.chapter.pages.length}
@@ -1499,7 +1557,7 @@ const ChapterReaderPage = () => {
       >
         <button
           onClick={prevPage}
-          disabled={currentPage === 0 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === 0)}
+          disabled={currentPage === 0 && isFirstChapter}
           className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 rounded"
         >
           <ChevronLeft className="h-5 w-5" />
@@ -1511,7 +1569,7 @@ const ChapterReaderPage = () => {
 
         <button
           onClick={nextPage}
-          disabled={currentPage >= data.chapter.pages.length - 1 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === data.allChapters.length - 1)}
+          disabled={currentPage >= data.chapter.pages.length - 1 && isLastChapter}
           className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 rounded"
         >
           <ChevronRight className="h-5 w-5" />
@@ -1531,7 +1589,7 @@ const ChapterReaderPage = () => {
   <button
     onClick={prevPage}
     className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
-    disabled={currentPage === 0 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === 0)}
+    disabled={currentPage === 0 && isFirstChapter}
   >
     <ArrowLeft className="h-6 w-6" />
   </button>
@@ -1550,7 +1608,7 @@ const ChapterReaderPage = () => {
   <button
     onClick={nextPage}
     className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
-    disabled={currentPage >= data.chapter.pages.length - 1 && (!data.allChapters || data.allChapters.findIndex(ch => ch.chapterNumber === parseInt(chapterNumber)) === data.allChapters.length - 1)}
+    disabled={currentPage >= data.chapter.pages.length - 1 && isLastChapter}
   >
     <ArrowRight className="h-6 w-6" />
   </button>
@@ -1611,9 +1669,9 @@ const secondsPassed = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSec
 const thirtySecondBlocks = Math.floor(secondsPassed / 30);
 const rotationIndex = thirtySecondBlocks % mangaList.length;
   
-  setFeaturedManga(mangaList[rotationIndex]);
+  // Trigger fade out, then change manga, then fade in
   
-  console.log(`🔄 5-min rotation: Block ${fiveMinuteBlocks}, showing manga ${rotationIndex}: ${mangaList[rotationIndex].title}`);
+  console.log(`🔄 30-sec rotation: Block ${thirtySecondBlocks}, showing manga ${rotationIndex}: ${mangaList[rotationIndex].title}`);
 } // Fallback to first manga if no chapters found
     }
   } catch (error) {

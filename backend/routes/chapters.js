@@ -5,11 +5,26 @@ import Chapter from '../models/Chapter.js';
 
 const router = express.Router();
 
+const VIEW_INCREMENT_WINDOW_MS = 3000;
+const recentViewIncrements = new Map();
+
+const purgeOldViewEntries = (now) => {
+  for (const [key, timestamp] of recentViewIncrements.entries()) {
+    if (now - timestamp > VIEW_INCREMENT_WINDOW_MS) {
+      recentViewIncrements.delete(key);
+    }
+  }
+};
+
 // Get chapter by manga ID and chapter number (with volume support)
 router.get('/manga/:mangaId/chapter/:chapterNumber', async (req, res) => {
   try {
     const { mangaId, chapterNumber } = req.params;
-    const chapterNum = parseInt(chapterNumber);
+    const chapterNum = Number(chapterNumber);
+
+    if (Number.isNaN(chapterNum)) {
+      return res.status(400).json({ message: 'Invalid chapter number' });
+    }
     
     // Find manga in MongoDB
     const manga = await Manga.findById(mangaId);
@@ -28,6 +43,7 @@ router.get('/manga/:mangaId/chapter/:chapterNumber', async (req, res) => {
           allChapters.push({
             _id: chapter._id,
             chapterNumber: chapter.chapterNumber,
+            chapterNumberLabel: chapter.chapterNumberLabel || (chapter.chapterNumber != null ? chapter.chapterNumber.toString() : null),
             title: chapter.title,
             pages: chapter.pages,
             volumeNumber: chapter.volumeNumber,
@@ -42,6 +58,7 @@ router.get('/manga/:mangaId/chapter/:chapterNumber', async (req, res) => {
       allChapters = manga.chapters.map(chapter => ({
         _id: chapter._id,
         chapterNumber: chapter.chapterNumber,
+        chapterNumberLabel: chapter.chapterNumberLabel || (chapter.chapterNumber != null ? chapter.chapterNumber.toString() : null),
         title: chapter.title,
         pages: chapter.pages,
         views: chapter.views || 0,
@@ -68,25 +85,39 @@ router.get('/manga/:mangaId/chapter/:chapterNumber', async (req, res) => {
       return res.status(404).json({ message: 'No pages found for this chapter' });
     }
     
-    // Increment chapter views in the database
-    if (manga.hasVolumes) {
-      // Find and update chapter in volume
-      for (let volume of manga.volumes) {
-        const chapterIndex = volume.chapters.findIndex(ch => ch.chapterNumber === chapterNum);
+    const clientIdentifier = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+    const cacheKey = `${clientIdentifier}-${mangaId}-${chapterNum}`;
+    const now = Date.now();
+    purgeOldViewEntries(now);
+
+    const lastIncrement = recentViewIncrements.get(cacheKey);
+    const shouldIncrementView = !lastIncrement || (now - lastIncrement) > VIEW_INCREMENT_WINDOW_MS;
+
+    if (shouldIncrementView) {
+      if (manga.hasVolumes) {
+        // Find and update chapter in volume
+        for (let volume of manga.volumes) {
+          const chapterIndex = volume.chapters.findIndex(ch => ch.chapterNumber === chapterNum);
+          if (chapterIndex !== -1) {
+            const currentViews = volume.chapters[chapterIndex].views || 0;
+            volume.chapters[chapterIndex].views = currentViews + 1;
+            targetChapter.views = currentViews + 1;
+            break;
+          }
+        }
+      } else {
+        // Find and update chapter in flat structure
+        const chapterIndex = manga.chapters.findIndex(ch => ch.chapterNumber === chapterNum);
         if (chapterIndex !== -1) {
-          volume.chapters[chapterIndex].views = (volume.chapters[chapterIndex].views || 0) + 1;
-          break;
+          const currentViews = manga.chapters[chapterIndex].views || 0;
+          manga.chapters[chapterIndex].views = currentViews + 1;
+          targetChapter.views = currentViews + 1;
         }
       }
-    } else {
-      // Find and update chapter in flat structure
-      const chapterIndex = manga.chapters.findIndex(ch => ch.chapterNumber === chapterNum);
-      if (chapterIndex !== -1) {
-        manga.chapters[chapterIndex].views = (manga.chapters[chapterIndex].views || 0) + 1;
-      }
+
+      recentViewIncrements.set(cacheKey, now);
+      await manga.save();
     }
-    
-    await manga.save();
     
     // Create response
     const chapter = {
@@ -102,6 +133,7 @@ router.get('/manga/:mangaId/chapter/:chapterNumber', async (req, res) => {
       allChapters: allChapters.map(ch => ({
         _id: ch._id,
         chapterNumber: ch.chapterNumber,
+        chapterNumberLabel: ch.chapterNumberLabel || (ch.chapterNumber != null ? ch.chapterNumber.toString() : null),
         title: ch.title,
         volumeNumber: ch.volumeNumber,
         volumeTitle: ch.volumeTitle

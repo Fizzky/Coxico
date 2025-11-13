@@ -118,7 +118,15 @@ function AuthProvider({ children }) {
   }, [favorites, slugToIdCache]);
 
   // NEW: Update reading progress
-  const updateReadingProgress = useCallback(async (mangaId, chapterId, chapterNumber, currentPage, totalPages, readingTime = 0) => {
+  const updateReadingProgress = useCallback(async (
+    mangaId,
+    chapterId,
+    chapterNumber,
+    currentPage,
+    totalPages,
+    readingTime = 0,
+    chapterNumberLabel = null
+  ) => {
     try {
       if (!token) return { success: false, message: 'Not authenticated' };
 
@@ -128,7 +136,8 @@ function AuthProvider({ children }) {
         chapterNumber,
         currentPage,
         totalPages,
-        readingTime
+        readingTime,
+        chapterNumberLabel
       });
 
       // Refresh continue reading list

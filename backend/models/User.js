@@ -65,6 +65,10 @@ readingHistory: [{
     type: Number,
     required: true
   },
+  chapterNumberLabel: {
+    type: String,
+    default: null
+  },
   currentPage: {
     type: Number,
     default: 0
@@ -101,6 +105,10 @@ continueReading: [{
   chapterNumber: {
     type: Number,
     required: true
+  },
+  chapterNumberLabel: {
+    type: String,
+    default: null
   },
   currentPage: {
     type: Number,

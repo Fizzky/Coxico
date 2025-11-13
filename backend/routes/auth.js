@@ -380,16 +380,27 @@ router.post('/reading-progress', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const { mangaId, chapterId, chapterNumber, currentPage, totalPages, readingTime } = req.body;
+    const { mangaId, chapterId, chapterNumber, currentPage, totalPages, readingTime, chapterNumberLabel } = req.body;
+    
+    const numericChapterNumber = Number(chapterNumber);
+    const numericCurrentPage = Number(currentPage);
+    const numericTotalPages = Number(totalPages);
+    const numericReadingTime = Number(readingTime) || 0;
+
+    if (!mangaId || !chapterId || Number.isNaN(numericChapterNumber) || Number.isNaN(numericCurrentPage) || Number.isNaN(numericTotalPages)) {
+      console.log('❌ Invalid reading progress payload received');
+      return res.status(400).json({ message: 'Invalid reading progress payload' });
+    }
     
     console.log('📖 Reading progress update received:', {
       userId: decoded.userId,
       mangaId,
       chapterId,
-      chapterNumber,
-      currentPage,
-      totalPages,
-      readingTime
+      chapterNumber: numericChapterNumber,
+      chapterNumberLabel: chapterNumberLabel,
+      currentPage: numericCurrentPage,
+      totalPages: numericTotalPages,
+      readingTime: numericReadingTime
     });
 
     // ⭐ NEW: Convert mangaId slug to ObjectId
@@ -437,7 +448,8 @@ user.continueReading = user.continueReading.filter(c =>
 console.log('After cleanup - history length:', user.readingHistory.length);
 console.log('After cleanup - continue reading length:', user.continueReading.length);
 
-    const isCompleted = currentPage >= Math.floor(totalPages * 0.9);
+    const isCompleted = numericCurrentPage >= Math.floor(numericTotalPages * 0.9);
+    const normalizedChapterLabel = chapterNumberLabel || (!Number.isNaN(numericChapterNumber) ? numericChapterNumber.toString() : null);
 
     // Use actualMangaId instead of mangaId
     const existingHistoryIndex = user.readingHistory.findIndex(
@@ -452,24 +464,26 @@ console.log('After cleanup - continue reading length:', user.continueReading.len
       user.readingHistory[existingHistoryIndex] = {
         manga: actualMangaId,  // Use actualMangaId
         chapter: chapterId,
-        chapterNumber,
-        currentPage,
-        totalPages,
+        chapterNumber: numericChapterNumber,
+        chapterNumberLabel: normalizedChapterLabel,
+        currentPage: numericCurrentPage,
+        totalPages: numericTotalPages,
         isCompleted,
         lastReadAt: new Date(),
-        readingTime: (existing.readingTime || 0) + (readingTime || 0)
+        readingTime: (existing.readingTime || 0) + numericReadingTime
       };
     } else {
       console.log('➕ Creating new history entry');
       user.readingHistory.push({
         manga: actualMangaId,  // Use actualMangaId
         chapter: chapterId,
-        chapterNumber,
-        currentPage,
-        totalPages,
+        chapterNumber: numericChapterNumber,
+        chapterNumberLabel: normalizedChapterLabel,
+        currentPage: numericCurrentPage,
+        totalPages: numericTotalPages,
         isCompleted,
         lastReadAt: new Date(),
-        readingTime: readingTime || 0
+        readingTime: numericReadingTime
       });
     }
 
@@ -484,8 +498,9 @@ console.log('After cleanup - continue reading length:', user.continueReading.len
         user.continueReading[existingContinueIndex] = {
           manga: actualMangaId,  // Use actualMangaId
           chapter: chapterId,
-          chapterNumber,
-          currentPage,
+          chapterNumber: numericChapterNumber,
+          chapterNumberLabel: normalizedChapterLabel,
+          currentPage: numericCurrentPage,
           lastReadAt: new Date()
         };
       } else {
@@ -493,8 +508,9 @@ console.log('After cleanup - continue reading length:', user.continueReading.len
         user.continueReading.push({
           manga: actualMangaId,  // Use actualMangaId
           chapter: chapterId,
-          chapterNumber,
-          currentPage,
+        chapterNumber: numericChapterNumber,
+        chapterNumberLabel: normalizedChapterLabel,
+          currentPage: numericCurrentPage,
           lastReadAt: new Date()
         });
       }
@@ -595,6 +611,7 @@ const enrichedHistory = await Promise.all(
   return {
     _id: item._id,
     chapterNumber: item.chapterNumber,
+    chapterNumberLabel: chapter?.chapterNumberLabel || item.chapterNumberLabel || (item.chapterNumber != null ? item.chapterNumber.toString() : null),
     currentPage: item.currentPage,
     totalPages: item.totalPages,
     isCompleted: item.isCompleted,
@@ -610,6 +627,7 @@ const enrichedHistory = await Promise.all(
     chapter: chapter ? {
       _id: chapter._id,
       chapterNumber: chapter.chapterNumber,
+      chapterNumberLabel: chapter.chapterNumberLabel || (chapter.chapterNumber != null ? chapter.chapterNumber.toString() : null),
       title: chapter.title
     } : null
   };
@@ -618,6 +636,7 @@ const enrichedHistory = await Promise.all(
   return {
     _id: item._id,
     chapterNumber: item.chapterNumber,
+    chapterNumberLabel: item.chapterNumberLabel || (item.chapterNumber != null ? item.chapterNumber.toString() : null),
     currentPage: item.currentPage,
     totalPages: item.totalPages,
     isCompleted: item.isCompleted,
@@ -748,9 +767,11 @@ router.get('/continue-reading', async (req, res) => {
             chapter: chapter ? {
               _id: chapter._id,
               chapterNumber: chapter.chapterNumber,
+              chapterNumberLabel: chapter.chapterNumberLabel || (chapter.chapterNumber != null ? chapter.chapterNumber.toString() : null),
               title: chapter.title
             } : null,
             chapterNumber: item.chapterNumber,
+            chapterNumberLabel: item.chapterNumberLabel || (item.chapterNumber != null ? item.chapterNumber.toString() : null),
             currentPage: item.currentPage,
             lastReadAt: item.lastReadAt
           };

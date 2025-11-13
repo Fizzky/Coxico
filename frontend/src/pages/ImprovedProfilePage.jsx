@@ -260,12 +260,14 @@ export default function ImprovedProfilePage() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
               gap: '16px'
             }}>
-              {continueReading.slice(0, 6).map((item, index) => (
+              {continueReading.slice(0, 6).map((item, index) => {
+                const chapterLabel = item.chapter?.chapterNumberLabel || item.chapterNumberLabel || (item.chapterNumber != null ? item.chapterNumber.toString() : '');
+                return (
                 <div
                   key={index}
                   onClick={() => {
-                    if (item.manga?._id && item.chapterNumber) {
-                      navigate(`/manga/${item.manga._id}/chapter/${item.chapterNumber}`);
+                    if (item.manga?._id && chapterLabel) {
+                      navigate(`/manga/${item.manga._id}/chapter/${chapterLabel}`);
                     }
                   }}
                   style={{
@@ -302,7 +304,7 @@ export default function ImprovedProfilePage() {
                       background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
                       fontSize: '12px'
                     }}>
-                      Chapter {item.chapterNumber}
+                      Chapter {chapterLabel}
                     </div>
                   </div>
                   <div style={{ padding: '12px' }}>
@@ -324,7 +326,7 @@ export default function ImprovedProfilePage() {
                     </p>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           </div>
         )}

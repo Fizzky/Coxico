@@ -66,6 +66,10 @@ export default function ReadingHistoryPage() {
   };
 
 
+  const getChapterLabel = (item) => {
+    return item.chapter?.chapterNumberLabel || item.chapterNumberLabel || (item.chapterNumber != null ? item.chapterNumber.toString() : '');
+  };
+
   const continueReading = (item) => {
   console.log('🚀 CONTINUE READING DEBUG:');
   console.log('Full item:', item);
@@ -73,17 +77,17 @@ export default function ReadingHistoryPage() {
   console.log('item.totalPages:', item.totalPages);
   
   const mangaId = item.manga?._id;
-  const chapterNum = item.chapterNumber;
+  const chapterLabel = getChapterLabel(item);
   const page = item.currentPage || 1;
   
-  console.log('Extracted values:', { mangaId, chapterNum, page });
+  console.log('Extracted values:', { mangaId, chapterLabel, page });
   
-  if (mangaId && chapterNum) {
-    const url = `/manga/${mangaId}/chapter/${chapterNum}?page=${page}`;
+  if (mangaId && chapterLabel) {
+    const url = `/manga/${mangaId}/chapter/${chapterLabel}?page=${page}`;
     console.log('Navigating to URL:', url);
     navigate(url);
   } else {
-    console.error('Missing data!', { mangaId, chapterNum });
+    console.error('Missing data!', { mangaId, chapterLabel });
     alert('Unable to continue reading. Missing manga ID or chapter number.');
   }
 };
@@ -91,7 +95,7 @@ export default function ReadingHistoryPage() {
   const filteredHistory = readingHistory.filter(item => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const chapterNum = item.chapterNumber?.toString().toLowerCase() || '';
+      const chapterNum = getChapterLabel(item).toLowerCase();
       return chapterNum.includes(query);
     }
     return true;
@@ -400,7 +404,7 @@ export default function ReadingHistoryPage() {
   fontSize: '14px',
   marginBottom: '12px'
 }}>
-  Chapter {item.chapterNumber}{item.chapter?.title ? `: ${item.chapter.title}` : ''}
+  Chapter {getChapterLabel(item)}{item.chapter?.title ? `: ${item.chapter.title}` : ''}
 </p>
                     
                     {/* Progress Bar */}

@@ -3,6 +3,15 @@ import mongoose from 'mongoose';
 
 const chapterSchema = new mongoose.Schema({
   chapterNumber: { type: Number, required: true },
+  chapterNumberLabel: {
+    type: String,
+    default: function () {
+      if (this.chapterNumber === undefined || this.chapterNumber === null) {
+        return null;
+      }
+      return this.chapterNumber.toString();
+    }
+  },
   title: { type: String, required: true },
   pages: [{ type: String }], // Array of S3 URLs
   volumeNumber: Number,

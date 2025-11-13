@@ -13,6 +13,15 @@ const chapterSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  chapterNumberLabel: {
+    type: String,
+    default: function () {
+      if (this.chapterNumber === undefined || this.chapterNumber === null) {
+        return null;
+      }
+      return this.chapterNumber.toString();
+    }
+  },
   title: {
     type: String,
     required: true
@@ -43,10 +52,11 @@ const chapterSchema = new mongoose.Schema({
 });
 
 // Compound index for efficient querying
-chapterSchema.index({ mangaId: 1, chapterNumber: 1 }, { unique: true });
+chapterSchema.index({ mangaId: 1, chapterNumber: 1 });
 chapterSchema.index({ uploadedAt: -1 });
 
 // Helpful secondary indexes (existing + volume filters)
 chapterSchema.index({ mangaId: 1, volumeNumber: 1, chapterNumber: 1 });
+chapterSchema.index({ mangaId: 1, chapterNumberLabel: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model('Chapter', chapterSchema);

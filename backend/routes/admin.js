@@ -24,6 +24,12 @@ function getUploadMiddleware() {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
       },
+      // SOLUTION 3: Prevent connection buildup
+      maxAttempts: 3,
+      requestHandler: {
+        connectionTimeout: 30000,
+        socketTimeout: 30000,
+      }
     });
 
     console.log('Initializing S3 upload middleware...');
@@ -44,7 +50,7 @@ function getUploadMiddleware() {
       }),
       limits: {
         fileSize: 50 * 1024 * 1024, // 50MB per file
-        files: 200 // Increased to 200 files
+        files: 500  // Increased to 200 files
       }
     });
   }
@@ -116,21 +122,27 @@ router.post('/login', [
 
 // Upload cover image (using lazy-loaded middleware)
 router.post('/upload-cover', adminAuth, (req, res, next) => {
-  const upload = getUploadMiddleware().fields([
-    { name: 'cover', maxCount: 1 }
-  ]);
+  const upload = getUploadMiddleware().single('cover');
   upload(req, res, next);
 }, async (req, res) => {
   try {
-    if (!req.files || !req.files.cover || req.files.cover.length === 0) {
+    if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    const file = req.files.cover[0];
-    res.json({
-      success: true,
-      url: file.location,
-      key: file.key
-    });
+    res.json({ success: true, url: req.file.location });
+
+// RIGHT - cleanup happens AFTER response sent
+setImmediate(() => {
+  try {
+    req.file = null;
+    if (global.gc) {
+      global.gc();
+    }
+  } catch (cleanupError) {
+    console.error('Cleanup error (non-fatal):', cleanupError.message);
+  }
+});
+
   } catch (error) {
     console.error('Cover upload error:', error);
     res.status(500).json({ error: 'Failed to upload cover' });
@@ -140,22 +152,327 @@ router.post('/upload-cover', adminAuth, (req, res, next) => {
 // Upload chapter pages (using lazy-loaded middleware)
 router.post('/upload-pages', adminAuth, (req, res, next) => {
   const upload = getUploadMiddleware().fields([
-    { name: 'pages', maxCount: 200 }
+    { name: 'pages', maxCount: 500 }
   ]);
   upload(req, res, next);
 }, async (req, res) => {
+  const memBefore = process.memoryUsage().heapUsed / 1024 / 1024;
+  console.log(`📊 Memory before upload: ${memBefore.toFixed(2)} MB`);
+  
   try {
     if (!req.files || !req.files.pages || req.files.pages.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
     }
     const pageUrls = req.files.pages.map(file => file.location);
-    res.json({
-      success: true,
-      pages: pageUrls
-    });
+    
+    const memAfter = process.memoryUsage().heapUsed / 1024 / 1024;
+    console.log(`📊 Memory after upload: ${memAfter.toFixed(2)} MB (Δ ${(memAfter - memBefore).toFixed(2)} MB)`);
+    
+    res.json({ success: true, pages: pageUrls });
+
+// RIGHT - cleanup happens AFTER response sent
+setImmediate(() => {
+  try {
+    req.files = null;
+    if (global.gc) {
+      global.gc();
+    }
+  } catch (cleanupError) {
+    console.error('Cleanup error (non-fatal):', cleanupError.message);
+  }
+});
+
   } catch (error) {
     console.error('Pages upload error:', error);
     res.status(500).json({ error: 'Failed to upload pages' });
+  }
+});
+
+// Add volumes/chapters to existing manga
+router.post('/manga/:mangaId/add-volumes', adminAuth, async (req, res) => {
+  try {
+    const { mangaId } = req.params;
+    const { volumes } = req.body;  // Array of new volumes to add
+
+    console.log(`Adding ${volumes?.length} volumes to manga: ${mangaId}`);
+
+    // Find existing manga
+    const manga = await Manga.findById(mangaId);
+    
+    if (!manga) {
+      return res.status(404).json({ error: 'Manga not found' });
+    }
+
+    // Validate volumes data
+    if (!volumes || volumes.length === 0) {
+      return res.status(400).json({ error: 'No volumes provided' });
+    }
+
+    // Flatten new chapters for adding to chapters array
+    const newChapters = [];
+    volumes.forEach(vol => {
+      vol.chapters.forEach(ch => {
+        newChapters.push({
+          ...ch,
+          volumeNumber: vol.volumeNumber,
+          volumeTitle: vol.volumeTitle
+        });
+      });
+    });
+
+    // Check for duplicate chapters
+    const existingChapterKeys = new Set();
+    if (manga.hasVolumes && manga.volumes) {
+      manga.volumes.forEach(vol => {
+        vol.chapters.forEach(ch => {
+          existingChapterKeys.add(`${vol.volumeNumber}-${ch.chapterNumber}`);
+        });
+      });
+    }
+    if (manga.chapters) {
+      manga.chapters.forEach(ch => {
+        existingChapterNumbers.add(ch.chapterNumber);
+      });
+    }
+
+    const duplicates = newChapters.filter(ch => existingChapterKeys.has(`${ch.volumeNumber}-${ch.chapterNumber}`));
+    if (duplicates.length > 0) {
+      return res.status(400).json({ 
+        error: 'Duplicate chapters found',
+        duplicateChapters: duplicates.map(ch => ch.chapterNumber)
+      });
+    }
+
+    // Update manga
+    if (!manga.hasVolumes) {
+      // Convert flat structure to volume structure
+      manga.hasVolumes = true;
+      manga.volumes = volumes;
+    } else {
+      // Add to existing volumes
+      // Merge with existing volumes or add new ones
+      const existingVolumeNumbers = new Set(manga.volumes.map(v => v.volumeNumber));
+      
+      volumes.forEach(newVolume => {
+        if (existingVolumeNumbers.has(newVolume.volumeNumber)) {
+          // Add chapters to existing volume
+          const existingVolume = manga.volumes.find(v => v.volumeNumber === newVolume.volumeNumber);
+          existingVolume.chapters.push(...newVolume.chapters);
+          existingVolume.chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+        } else {
+          // Add new volume
+          manga.volumes.push(newVolume);
+        }
+      });
+      
+      // Sort volumes
+      manga.volumes.sort((a, b) => a.volumeNumber - b.volumeNumber);
+    }
+
+    // Add to flattened chapters array
+    manga.chapters.push(...newChapters);
+    manga.chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+    // Update chapter count
+    manga.totalChapters = manga.chapters.length;
+    manga.updatedAt = new Date();
+
+    await manga.save();
+
+    console.log(`✅ Added ${volumes.length} volumes (${newChapters.length} chapters) to ${manga.title}`);
+
+    res.json({
+      success: true,
+      message: `Added ${volumes.length} volumes with ${newChapters.length} chapters`,
+      manga,
+      addedVolumes: volumes.length,
+      addedChapters: newChapters.length,
+      totalChapters: manga.totalChapters
+    });
+
+  } catch (error) {
+    console.error('Add volumes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/create-manga-with-volumes', adminAuth, async (req, res) => {
+  try {
+    const {
+      mangaId,
+      title,
+      description,
+      author,
+      artist,
+      genres,
+      status,
+      coverImage,
+      volumes  // NEW: Array of volumes with chapters
+    } = req.body;
+
+    console.log('Creating manga with volumes:', {
+      mangaId,
+      volumeCount: volumes?.length,
+      totalChapters: volumes?.reduce((sum, v) => sum + v.chapters.length, 0)
+    });
+
+    // Validate that we have volumes
+    if (!volumes || volumes.length === 0) {
+      return res.status(400).json({ error: 'No volumes provided' });
+    }
+
+    // Flatten all chapters for totalChapters count
+    const allChapters = [];
+    volumes.forEach(vol => {
+      vol.chapters.forEach(ch => {
+        allChapters.push({
+          ...ch,
+          volumeNumber: vol.volumeNumber,
+          volumeTitle: vol.volumeTitle
+        });
+      });
+    });
+
+    const newManga = new Manga({
+      _id: mangaId,
+      title,
+      description,
+      author,
+      artist,
+      genres,
+      status,
+      coverImage,
+      rating: 0,
+      views: 0,
+      favorites: 0,
+      totalChapters: allChapters.length,
+      hasVolumes: true,  // IMPORTANT: Set this to true
+      volumes,           // Store volumes with embedded chapters
+      chapters: allChapters,  // Also store flattened chapters for compatibility
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    await newManga.save();
+
+    console.log(`✅ Manga created with ${volumes.length} volumes and ${allChapters.length} total chapters`);
+
+    res.json({
+      success: true,
+      manga: newManga,
+      message: `Created ${volumes.length} volumes with ${allChapters.length} chapters`
+    });
+  } catch (error) {
+    console.error('Create manga with volumes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add volumes/chapters to existing manga
+router.post('/manga/:mangaId/add-volumes', adminAuth, async (req, res) => {
+  try {
+    const { mangaId } = req.params;
+    const { volumes } = req.body;  // Array of new volumes to add
+
+    console.log(`Adding ${volumes?.length} volumes to manga: ${mangaId}`);
+
+    // Find existing manga
+    const manga = await Manga.findById(mangaId);
+    
+    if (!manga) {
+      return res.status(404).json({ error: 'Manga not found' });
+    }
+
+    // Validate volumes data
+    if (!volumes || volumes.length === 0) {
+      return res.status(400).json({ error: 'No volumes provided' });
+    }
+
+    // Flatten new chapters for adding to chapters array
+    const newChapters = [];
+    volumes.forEach(vol => {
+      vol.chapters.forEach(ch => {
+        newChapters.push({
+          ...ch,
+          volumeNumber: vol.volumeNumber,
+          volumeTitle: vol.volumeTitle
+        });
+      });
+    });
+
+    // Check for duplicate chapters
+    const existingChapterKeys = new Set();
+    if (manga.hasVolumes && manga.volumes) {
+      manga.volumes.forEach(vol => {
+        vol.chapters.forEach(ch => {
+          existingChapterKeys.add(`${vol.volumeNumber}-${ch.chapterNumber}`);
+        });
+      });
+    }
+    if (manga.chapters) {
+      manga.chapters.forEach(ch => {
+        existingChapterKeys.add(`flat-${ch.chapterNumber}`);
+      });
+    }
+
+    const duplicates = newChapters.filter(ch => existingChapterKeys.has(`${ch.volumeNumber}-${ch.chapterNumber}`));
+    if (duplicates.length > 0) {
+      return res.status(400).json({ 
+        error: 'Duplicate chapters found',
+        duplicateChapters: duplicates.map(ch => ch.chapterNumber)
+      });
+    }
+
+    // Update manga
+    if (!manga.hasVolumes) {
+      // Convert flat structure to volume structure
+      manga.hasVolumes = true;
+      manga.volumes = volumes;
+    } else {
+      // Add to existing volumes
+      // Merge with existing volumes or add new ones
+      const existingVolumeNumbers = new Set(manga.volumes.map(v => v.volumeNumber));
+      
+      volumes.forEach(newVolume => {
+        if (existingVolumeNumbers.has(newVolume.volumeNumber)) {
+          // Add chapters to existing volume
+          const existingVolume = manga.volumes.find(v => v.volumeNumber === newVolume.volumeNumber);
+          existingVolume.chapters.push(...newVolume.chapters);
+          existingVolume.chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+        } else {
+          // Add new volume
+          manga.volumes.push(newVolume);
+        }
+      });
+      
+      // Sort volumes
+      manga.volumes.sort((a, b) => a.volumeNumber - b.volumeNumber);
+    }
+
+    // Add to flattened chapters array
+    manga.chapters.push(...newChapters);
+    manga.chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
+
+    // Update chapter count
+    manga.totalChapters = manga.chapters.length;
+    manga.updatedAt = new Date();
+
+    await manga.save();
+
+    console.log(`✅ Added ${volumes.length} volumes (${newChapters.length} chapters) to ${manga.title}`);
+
+    res.json({
+      success: true,
+      message: `Added ${volumes.length} volumes with ${newChapters.length} chapters`,
+      manga,
+      addedVolumes: volumes.length,
+      addedChapters: newChapters.length,
+      totalChapters: manga.totalChapters
+    });
+
+  } catch (error) {
+    console.error('Add volumes error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -171,8 +488,36 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       genres,
       status,
       coverImage,
-      chapters
+      chapters,
+      volumes  // NEW: Optional volumes array
     } = req.body;
+
+    // Auto-detect if we have volumes or flat chapters
+    const hasVolumes = volumes && volumes.length > 0;
+    
+    let allChapters = [];
+    let volumesData = [];
+
+    if (hasVolumes) {
+      // Volume-based structure
+      console.log(`Creating manga with ${volumes.length} volumes`);
+      volumesData = volumes;
+      
+      // Flatten chapters from volumes
+      volumes.forEach(vol => {
+        vol.chapters.forEach(ch => {
+          allChapters.push({
+            ...ch,
+            volumeNumber: vol.volumeNumber,
+            volumeTitle: vol.volumeTitle
+          });
+        });
+      });
+    } else {
+      // Flat chapter structure
+      console.log(`Creating manga with ${chapters?.length || 0} flat chapters`);
+      allChapters = chapters || [];
+    }
 
     const newManga = new Manga({
       _id: mangaId,
@@ -186,14 +531,17 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       rating: 0,
       views: 0,
       favorites: 0,
-      totalChapters: chapters.length,
-      hasVolumes: false,
-      chapters,
+      totalChapters: allChapters.length,
+      hasVolumes,
+      volumes: volumesData,
+      chapters: allChapters,
       createdAt: new Date(),
       updatedAt: new Date()
     });
 
     await newManga.save();
+
+    console.log(`✅ Manga created: ${hasVolumes ? `${volumesData.length} volumes` : `${allChapters.length} chapters`}`);
 
     res.json({
       success: true,
@@ -542,6 +890,44 @@ router.get('/stats', adminAuth, async (req, res) => {
   } catch (error) {
     console.error('Get stats error:', error);
     res.status(500).json({ message: 'Server error: ' + error.message });
+  }
+});
+
+router.post('/cleanup-orphaned-chapters/:mangaId', adminAuth, async (req, res) => {
+  try {
+    const manga = await Manga.findById(req.params.mangaId);
+    
+    if (!manga) {
+      return res.status(404).json({ error: 'Manga not found' });
+    }
+
+    // Find chapters without volumeNumber
+    const orphanedChapters = manga.chapters.filter(ch => !ch.volumeNumber);
+    
+    console.log('Found orphaned chapters:', orphanedChapters.map(ch => ({
+      chapter: ch.chapterNumber,
+      title: ch.title
+    })));
+
+    // Remove chapters without volumeNumber
+    const before = manga.chapters.length;
+    manga.chapters = manga.chapters.filter(ch => ch.volumeNumber != null);
+    const after = manga.chapters.length;
+    
+    await manga.save();
+    
+    res.json({ 
+      message: `✅ Cleaned up ${before - after} orphaned chapters`,
+      removed: orphanedChapters.map(ch => ({
+        chapter: ch.chapterNumber,
+        title: ch.title
+      })),
+      before,
+      after
+    });
+  } catch (error) {
+    console.error('Cleanup error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

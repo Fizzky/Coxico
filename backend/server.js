@@ -6,6 +6,14 @@ import mongoSanitize from 'express-mongo-sanitize';
 import xss from 'xss-clean';
 import hpp from 'hpp';
 import rateLimit from 'express-rate-limit';
+import timeout from 'connect-timeout';
+
+process.on('uncaughtException', (error, origin) => {
+  console.error('\n💥 CRASH DETECTED 💥');
+  console.error('Error:', error.message);
+  console.error('Stack:', error.stack);
+  setTimeout(() => process.exit(1), 2000);
+});
 
 // Resolve __dirname in ESM first
 const __filename = fileURLToPath(import.meta.url);
@@ -43,19 +51,26 @@ app.use(mongoSanitize())
 app.use(xss())
 app.use(hpp())
 
-// Rate limiting
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: 'Too many requests, please try again later.'
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(cors());
+
+app.use(timeout('600s')); 
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    req.body = null;
+    req.files = null;
+  });
+  next();
 });
 
+// Rate limiting - ONLY protect auth
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5
+  max: 10,
+  message: 'Too many login attempts'
 });
 
-app.use("/api/", apiLimiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 
@@ -90,8 +105,12 @@ app.use(cors({
 }));
 
 // ---------- Middleware ----------
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: "50mb",
+  parameterLimit: 50000  // ADD THIS
+}));
 
 // ---------- Static files ----------
 // If you chose uploads/ as your static root:
@@ -153,4 +172,56 @@ app.listen(PORT, HOST, () => {
   console.log(`📊 Health check: http://${HOST}:${PORT}/api/health`);
   console.log(`📚 Manga API: http://${HOST}:${PORT}/api/manga`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // SOLUTION 5: Memory monitoring
+setInterval(() => {
+  const used = process.memoryUsage();
+  console.log(`💾 Memory: ${Math.round(used.heapUsed / 1024 / 1024)} MB / ${Math.round(used.heapTotal / 1024 / 1024)} MB`);
+  
+  // Force cleanup if memory is high
+  if (used.heapUsed / used.heapTotal > 0.9) {
+    console.log('⚠️ High memory usage! Forcing garbage collection...');
+    if (global.gc) {
+      global.gc();
+    }
+  }
+}, 30000); // Check every 30 seconds
+
+// SOLUTION 6: Process error handlers
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+  // Give time to log before exit
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled Rejection at:', promise);
+  console.error('Reason:', reason);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('👋 SIGTERM received, shutting down gracefully...');
+  try {
+    await mongoose.connection.close();
+    console.log('✅ MongoDB connection closed');
+    process.exit(0);
+  } catch (err) {
+    console.error('Error closing MongoDB:', err);
+    process.exit(1);
+  }
+});
+
+process.on('SIGINT', async () => {
+  console.log('👋 SIGINT received, shutting down gracefully...');
+  try {
+    await mongoose.connection.close();
+    console.log('✅ MongoDB connection closed');
+    process.exit(0);
+  } catch (err) {
+    console.error('Error closing MongoDB:', err);
+    process.exit(1);
+  }
+});
 });

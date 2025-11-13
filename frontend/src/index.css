@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Fixed viewport - prevents zoom scaling */
+html {
+  min-width: 1280px;
+  overflow-x: auto;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -9,6 +15,16 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-width: 1280px;
+  zoom: 1.0;
+}
+
+/* Prevent all zoom scaling */
+html, body {
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 .line-clamp-2 {

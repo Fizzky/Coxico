@@ -749,7 +749,7 @@ const deleteMangaWithChapters = async () => {
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-medium text-white">
-                            Chapter {chapter.chapterNumber}: {chapter.title}
+                            Chapter {chapter.chapterNumberLabel || chapter.chapterNumber}: {chapter.title}
                           </h3>
                           <p className="text-sm text-gray-400">
                             {chapter.pages?.length || 0} pages • {chapter.views} views
@@ -830,7 +830,8 @@ const deleteMangaWithChapters = async () => {
 // Chapter Form Component
 const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    chapterNumber: chapter?.chapterNumber || '',
+    chapterNumber: typeof chapter?.chapterNumber === 'number' ? chapter.chapterNumber : '',
+    chapterNumberLabel: chapter?.chapterNumberLabel || (chapter?.chapterNumber != null ? chapter.chapterNumber.toString() : ''),
     title: chapter?.title || '',
     pages: chapter?.pages || []
   });
@@ -854,8 +855,17 @@ const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
     setLoading(true);
 
     try {
+      const parsedNumber = parseFloat(formData.chapterNumberLabel ?? '');
+      if (Number.isNaN(parsedNumber)) {
+        alert('Please enter a valid chapter number.');
+        setLoading(false);
+        return;
+      }
+
       const submitData = {
         ...formData,
+        chapterNumber: parsedNumber,
+        chapterNumberLabel: formData.chapterNumberLabel || parsedNumber.toString(),
         mangaId: manga._id
       };
 
@@ -890,10 +900,17 @@ const ChapterForm = ({ manga, chapter, onClose, onSave }) => {
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Chapter Number</label>
               <input
-                type="number"
-                min="1"
-                value={formData.chapterNumber}
-                onChange={(e) => setFormData({ ...formData, chapterNumber: parseInt(e.target.value) })}
+                type="text"
+                value={formData.chapterNumberLabel || ''}
+                onChange={(e) => {
+                  const rawValue = e.target.value;
+                  const parsed = parseFloat(rawValue);
+                  setFormData(prev => ({
+                    ...prev,
+                    chapterNumberLabel: rawValue,
+                    chapterNumber: Number.isNaN(parsed) ? prev.chapterNumber : parsed
+                  }));
+                }}
                 className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white placeholder-gray-400 focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
                 required
               />
