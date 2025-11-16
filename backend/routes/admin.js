@@ -231,7 +231,12 @@ router.post('/manga/:mangaId/add-volumes', adminAuth, async (req, res) => {
     }
     if (manga.chapters) {
       manga.chapters.forEach(ch => {
-        existingChapterNumbers.add(ch.chapterNumber);
+        // Add flat chapters (without volumeNumber) with a different key format
+        if (ch.volumeNumber != null) {
+          existingChapterKeys.add(`${ch.volumeNumber}-${ch.chapterNumber}`);
+        } else {
+          existingChapterKeys.add(`flat-${ch.chapterNumber}`);
+        }
       });
     }
 
@@ -364,114 +369,6 @@ router.post('/create-manga-with-volumes', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Create manga with volumes error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Add volumes/chapters to existing manga
-router.post('/manga/:mangaId/add-volumes', adminAuth, async (req, res) => {
-  try {
-    const { mangaId } = req.params;
-    const { volumes } = req.body;  // Array of new volumes to add
-
-    console.log(`Adding ${volumes?.length} volumes to manga: ${mangaId}`);
-
-    // Find existing manga
-    const manga = await Manga.findById(mangaId);
-    
-    if (!manga) {
-      return res.status(404).json({ error: 'Manga not found' });
-    }
-
-    // Validate volumes data
-    if (!volumes || volumes.length === 0) {
-      return res.status(400).json({ error: 'No volumes provided' });
-    }
-
-    // Flatten new chapters for adding to chapters array
-    const newChapters = [];
-    volumes.forEach(vol => {
-      vol.chapters.forEach(ch => {
-        newChapters.push({
-          ...ch,
-          volumeNumber: vol.volumeNumber,
-          volumeTitle: vol.volumeTitle
-        });
-      });
-    });
-
-    // Check for duplicate chapters
-    const existingChapterKeys = new Set();
-    if (manga.hasVolumes && manga.volumes) {
-      manga.volumes.forEach(vol => {
-        vol.chapters.forEach(ch => {
-          existingChapterKeys.add(`${vol.volumeNumber}-${ch.chapterNumber}`);
-        });
-      });
-    }
-    if (manga.chapters) {
-      manga.chapters.forEach(ch => {
-        existingChapterKeys.add(`flat-${ch.chapterNumber}`);
-      });
-    }
-
-    const duplicates = newChapters.filter(ch => existingChapterKeys.has(`${ch.volumeNumber}-${ch.chapterNumber}`));
-    if (duplicates.length > 0) {
-      return res.status(400).json({ 
-        error: 'Duplicate chapters found',
-        duplicateChapters: duplicates.map(ch => ch.chapterNumber)
-      });
-    }
-
-    // Update manga
-    if (!manga.hasVolumes) {
-      // Convert flat structure to volume structure
-      manga.hasVolumes = true;
-      manga.volumes = volumes;
-    } else {
-      // Add to existing volumes
-      // Merge with existing volumes or add new ones
-      const existingVolumeNumbers = new Set(manga.volumes.map(v => v.volumeNumber));
-      
-      volumes.forEach(newVolume => {
-        if (existingVolumeNumbers.has(newVolume.volumeNumber)) {
-          // Add chapters to existing volume
-          const existingVolume = manga.volumes.find(v => v.volumeNumber === newVolume.volumeNumber);
-          existingVolume.chapters.push(...newVolume.chapters);
-          existingVolume.chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
-        } else {
-          // Add new volume
-          manga.volumes.push(newVolume);
-        }
-      });
-      
-      // Sort volumes
-      manga.volumes.sort((a, b) => a.volumeNumber - b.volumeNumber);
-    }
-
-    // Add to flattened chapters array
-    manga.chapters.push(...newChapters);
-    manga.chapters.sort((a, b) => a.chapterNumber - b.chapterNumber);
-
-    // Update chapter count
-    manga.totalChapters = manga.chapters.length;
-    manga.updatedAt = new Date();
-
-    await manga.save();
-
-    console.log(`✅ Added ${volumes.length} volumes (${newChapters.length} chapters) to ${manga.title}`);
-
-    res.json({
-      success: true,
-      message: `Added ${volumes.length} volumes with ${newChapters.length} chapters`,
-      manga,
-      addedVolumes: volumes.length,
-      addedChapters: newChapters.length,
-      totalChapters: manga.totalChapters
-    });
-
-  } catch (error) {
-    console.error('Add volumes error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -817,15 +714,63 @@ router.post('/users', adminAuth, async (req, res) => {
   }
 });
 
+// Update user subscription (MUST be before /users/:id to avoid route conflicts)
+router.patch('/users/:id/subscription', adminAuth, async (req, res) => {
+  try {
+    console.log('📝 Subscription update request:', req.params.id, req.body);
+    const { subscriptionType, subscriptionStatus, subscriptionStartDate, subscriptionEndDate } = req.body;
+    
+    const updateData = {};
+    if (subscriptionType) updateData.subscriptionType = subscriptionType;
+    if (subscriptionStatus) updateData.subscriptionStatus = subscriptionStatus;
+    if (subscriptionStartDate) updateData.subscriptionStartDate = subscriptionStartDate;
+    if (subscriptionEndDate !== undefined) updateData.subscriptionEndDate = subscriptionEndDate;
+    
+    console.log('📝 Update data:', updateData);
+    
+    const user = await User.findByIdAndUpdate(
+      req.params.id, 
+      updateData, 
+      { new: true }
+    ).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    console.log('✅ Subscription updated successfully for user:', user.username);
+    res.json({ message: 'Subscription updated successfully', user });
+  } catch (error) {
+    console.error('❌ Error updating subscription:', error);
+    res.status(500).json({ message: 'Error updating subscription: ' + error.message });
+  }
+});
+
+// Toggle user status (MUST be before /users/:id to avoid route conflicts)
+router.patch('/users/:id/status', adminAuth, async (req, res) => {
+  try {
+    const { isActive } = req.body;
+    const user = await User.findByIdAndUpdate(req.params.id, { isActive }, { new: true }).select('-password');
+    res.json({ message: 'User status updated', user });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    res.status(500).json({ message: 'Error updating user status' });
+  }
+});
+
 // Update user
 router.put('/users/:id', adminAuth, async (req, res) => {
   try {
-    const { username, email, password, role, isActive } = req.body;
+    const { username, email, password, role, isActive, subscriptionType, subscriptionStatus } = req.body;
     const updateData = { username, email, role, isActive };
     
     if (password && password.trim()) {
       updateData.password = await bcrypt.hash(password, 12);
     }
+    
+    // Handle subscription fields if provided
+    if (subscriptionType) updateData.subscriptionType = subscriptionType;
+    if (subscriptionStatus) updateData.subscriptionStatus = subscriptionStatus;
     
     const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true }).select('-password');
     res.json({ message: 'User updated successfully', user });
@@ -846,18 +791,6 @@ router.delete('/users/:id', adminAuth, async (req, res) => {
   }
 });
 
-// Toggle user status
-router.patch('/users/:id/status', adminAuth, async (req, res) => {
-  try {
-    const { isActive } = req.body;
-    const user = await User.findByIdAndUpdate(req.params.id, { isActive }, { new: true }).select('-password');
-    res.json({ message: 'User status updated', user });
-  } catch (error) {
-    console.error('Error updating user status:', error);
-    res.status(500).json({ message: 'Error updating user status' });
-  }
-});
-
 // Get dashboard stats
 router.get('/stats', adminAuth, async (req, res) => {
   try {
@@ -869,7 +802,12 @@ router.get('/stats', adminAuth, async (req, res) => {
     const allManga = await Manga.find().select('chapters').lean();
     const totalChapters = allManga.reduce((sum, m) => sum + (m.chapters?.length || 0), 0);
     
-    const totalUsers = await User.countDocuments({ role: 'user' });
+    const totalUsers = await User.countDocuments();
+    const premiumUsers = await User.countDocuments({ 
+      subscriptionType: 'premium', 
+      subscriptionStatus: 'active' 
+    });
+    const freeUsers = totalUsers - premiumUsers;
     
     const recentManga = await Manga.find()
       .sort({ createdAt: -1 })
@@ -883,7 +821,9 @@ router.get('/stats', adminAuth, async (req, res) => {
       stats: {
         totalManga,
         totalChapters,
-        totalUsers
+        totalUsers,
+        premiumUsers,
+        freeUsers
       },
       recentManga
     });

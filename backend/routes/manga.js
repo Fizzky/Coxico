@@ -110,12 +110,29 @@ router.get('/search-by-slug/:slug', async (req, res) => {
 // Get manga by ID with volume-aware chapters
 router.get('/:id', async (req, res) => {
   try {
-    const manga = await Manga.findById(req.params.id);
+    const id = decodeURIComponent(req.params.id); // Decode URL-encoded ID
+    console.log('🔍 Fetching manga with ID:', id);
+    
+    // Try findById first (works for both ObjectId and string _id)
+    let manga = await Manga.findById(id);
+    
+    // If not found, try finding by _id as string (for custom string IDs)
+    if (!manga) {
+      manga = await Manga.findOne({ _id: id });
+    }
+    
+    // If still not found, try case-insensitive search
+    if (!manga) {
+      manga = await Manga.findOne({ _id: { $regex: new RegExp(`^${id}$`, 'i') } });
+    }
     
     if (!manga) {
+      console.log('❌ Manga not found with ID:', id);
       return res.status(404).json({ message: 'Manga not found' });
     }
 
+    console.log('✅ Found manga:', manga.title, 'with ID:', manga._id);
+    
     // ✅ DON'T increment views here - just return data
     res.json({ 
       manga,

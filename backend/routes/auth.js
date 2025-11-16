@@ -351,6 +351,17 @@ router.post('/favorites/toggle/:mangaId', async (req, res) => {
       user.favorites = user.favorites.filter(fav => fav !== mangaId);
       manga.favorites = Math.max(0, (manga.favorites || 0) - 1);
     } else {
+      // Check favorites limit for free users
+      const FREE_FAVORITES_LIMIT = 20;
+      if (user.subscriptionType !== 'premium' || user.subscriptionStatus !== 'active') {
+        if (user.favorites.length >= FREE_FAVORITES_LIMIT) {
+          return res.status(403).json({ 
+            success: false,
+            message: `Favorite limit reached. You can only save ${FREE_FAVORITES_LIMIT} favorites. Upgrade to Premium for unlimited favorites!`
+          });
+        }
+      }
+      
       // Add to favorites
       user.favorites.push(mangaId);
       manga.favorites = (manga.favorites || 0) + 1;
@@ -981,53 +992,50 @@ router.get('/user-rating/:mangaId', authenticateToken, async (req, res) => {
 });
 
 // Replace the old debug route with this:
-router.get('/debug-chapters', async (req, res) => {
+// Increment download count for free users
+router.post('/increment-download', authenticateToken, async (req, res) => {
   try {
-    // Get the actual collection name
-    const collectionName = Chapter.collection.name;
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
     
-    // Try to find chapters multiple ways
-    const byMangaId = await Chapter.find({ mangaId: 'onepiece' }).limit(5);
-    const allChapters = await Chapter.find({}).limit(10);
-    const directById = await Chapter.findById('68d75049e1e76a5f2054bd30');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
     
-    // Also check raw MongoDB collection
-    const db = mongoose.connection.db;
-    const collections = await db.listCollections().toArray();
-    const collectionNames = collections.map(c => c.name);
+    // Check if user is premium (premium users don't need to track downloads)
+    if (user.subscriptionType === 'premium' && user.subscriptionStatus === 'active') {
+      return res.json({ 
+        message: 'Premium user - unlimited downloads',
+        downloadCount: user.downloadCount,
+        isPremium: true
+      });
+    }
+    
+    // Check if download limit reset is needed (monthly reset)
+    const now = new Date();
+    const resetDate = new Date(user.downloadLimitResetDate || now);
+    const daysSinceReset = Math.floor((now - resetDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysSinceReset >= 30) {
+      // Reset download count monthly
+      user.downloadCount = 0;
+      user.downloadLimitResetDate = now;
+    }
+    
+    // Increment download count
+    user.downloadCount = (user.downloadCount || 0) + 1;
+    await user.save();
     
     res.json({
-      modelCollectionName: collectionName,
-      allCollections: collectionNames,
-      searchByMangaId: {
-        count: byMangaId.length,
-        chapters: byMangaId.map(c => ({
-          _id: c._id,
-          mangaId: c.mangaId,
-          chapterNumber: c.chapterNumber,
-          title: c.title
-        }))
-      },
-      allChapters: {
-        count: allChapters.length,
-        chapters: allChapters.map(c => ({
-          _id: c._id,
-          mangaId: c.mangaId,
-          chapterNumber: c.chapterNumber,
-          title: c.title
-        }))
-      },
-      searchingForId: '68d75049e1e76a5f2054bd30',
-      directSearch: directById ? {
-        found: true,
-        id: directById._id,
-        mangaId: directById.mangaId,
-        chapterNumber: directById.chapterNumber
-      } : 'NOT FOUND'
+      message: 'Download count incremented',
+      downloadCount: user.downloadCount,
+      isPremium: false
     });
   } catch (error) {
-    res.status(500).json({ error: error.message, stack: error.stack });
+    console.error('Error incrementing download count:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
 
 export default router;

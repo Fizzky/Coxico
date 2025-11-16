@@ -42,6 +42,8 @@ import mangaRoutes from "./routes/manga.js";
 import chaptersRoutes from "./routes/chapters.js";
 import authRoutes from "./routes/auth.js";
 import adminRoutes from './routes/admin.js';
+import webhookRoutes from './routes/webhooks.js';
+import feedbackRoutes from './routes/feedback.js';
 
 const app = express();
 
@@ -79,7 +81,9 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
   'https://www.coxico.xyz',
-  'https://coxico.xyz'
+  'https://coxico.xyz',
+  'https://coxico-1g917f1z6-hafizs-projects-12fe0b3f.vercel.app',
+  'https://coxico.vercel.app' // Will work once domain is connected
 ];
 
 // Add FRONTEND_URL from environment if specified
@@ -124,6 +128,8 @@ app.use("/api/manga", mangaRoutes);
 app.use("/api/chapters", chaptersRoutes);
 app.use("/api/auth", authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // ---------- Basic health check route ----------
 app.get('/api/health', (req, res) => {
@@ -139,13 +145,15 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'Coxico API Server',
     version: '1.0.0',
-    endpoints: {
-      health: '/api/health',
-      manga: '/api/manga',
-      chapters: '/api/chapters',
-      auth: '/api/auth',
-      admin: '/api/admin'
-    }
+      endpoints: {
+        health: '/api/health',
+        manga: '/api/manga',
+        chapters: '/api/chapters',
+        auth: '/api/auth',
+        admin: '/api/admin',
+        webhooks: '/api/webhooks',
+        feedback: '/api/feedback'
+      }
   });
 });
 

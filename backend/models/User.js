@@ -168,6 +168,35 @@ mangaRatings: [{
   isActive: { 
     type: Boolean, 
     default: true 
+  },
+  
+  // Premium/Subscription fields
+  subscriptionType: {
+    type: String,
+    enum: ['free', 'premium'],
+    default: 'free'
+  },
+  subscriptionStatus: {
+    type: String,
+    enum: ['active', 'expired', 'cancelled'],
+    default: 'active'
+  },
+  subscriptionStartDate: {
+    type: Date,
+    default: null
+  },
+  subscriptionEndDate: {
+    type: Date,
+    default: null
+  },
+  // Track download count for free users (resets monthly)
+  downloadCount: {
+    type: Number,
+    default: 0
+  },
+  downloadLimitResetDate: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true

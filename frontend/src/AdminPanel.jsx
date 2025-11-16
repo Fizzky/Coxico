@@ -225,6 +225,10 @@ const AdminDashboard = () => {
                 <div>
                   <p className="text-gray-400 text-sm">Total Users</p>
                   <p className="text-3xl font-bold text-white">{stats.stats.totalUsers}</p>
+                  <div className="flex gap-4 mt-2 text-xs">
+                    <span className="text-yellow-400">⭐ Premium: {stats.stats.premiumUsers || 0}</span>
+                    <span className="text-gray-400">Free: {stats.stats.freeUsers || 0}</span>
+                  </div>
                 </div>
                 <Users className="h-8 w-8 text-purple-400" />
               </div>
@@ -1010,6 +1014,7 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
+  const [filterSubscription, setFilterSubscription] = useState('all');
   const [showUserForm, setShowUserForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
@@ -1063,7 +1068,10 @@ const UserManagement = () => {
     const matchesSearch = user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = filterRole === 'all' || user.role === filterRole;
-    return matchesSearch && matchesRole;
+    const matchesSubscription = filterSubscription === 'all' || 
+                               (filterSubscription === 'premium' && user.subscriptionType === 'premium' && user.subscriptionStatus === 'active') ||
+                               (filterSubscription === 'free' && (user.subscriptionType === 'free' || user.subscriptionStatus !== 'active'));
+    return matchesSearch && matchesRole && matchesSubscription;
   });
 
   return (
@@ -1080,7 +1088,7 @@ const UserManagement = () => {
       </div>
 
       <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-lg p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -1104,6 +1112,17 @@ const UserManagement = () => {
               <option value="admin">Admins</option>
             </select>
           </div>
+          <div>
+            <select
+              value={filterSubscription}
+              onChange={(e) => setFilterSubscription(e.target.value)}
+              className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
+            >
+              <option value="all">All Subscriptions</option>
+              <option value="premium">Premium</option>
+              <option value="free">Free</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1119,6 +1138,7 @@ const UserManagement = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Subscription</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Activity</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Joined</th>
@@ -1128,13 +1148,18 @@ const UserManagement = () => {
               <tbody className="divide-y divide-white/10">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-12 text-center text-gray-400">
+                    <td colSpan="7" className="px-6 py-12 text-center text-gray-400">
                       <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <p>No users found</p>
                     </td>
                   </tr>
                 ) : (
-                  filteredUsers.map((user) => (
+                  filteredUsers.map((user) => {
+                    const isPremium = user.subscriptionType === 'premium' && user.subscriptionStatus === 'active';
+                    const subscriptionEndDate = user.subscriptionEndDate ? new Date(user.subscriptionEndDate) : null;
+                    const isExpired = subscriptionEndDate && subscriptionEndDate < new Date();
+                    
+                    return (
                     <tr key={user._id} className="hover:bg-white/5">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -1167,6 +1192,27 @@ const UserManagement = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="space-y-1">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            isPremium
+                              ? 'bg-yellow-500/20 text-yellow-400' 
+                              : 'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {isPremium ? '⭐ Premium' : 'Free'}
+                          </span>
+                          {isPremium && subscriptionEndDate && (
+                            <div className="text-xs text-gray-400">
+                              {isExpired ? 'Expired' : `Expires: ${subscriptionEndDate.toLocaleDateString()}`}
+                            </div>
+                          )}
+                          {!isPremium && user.downloadCount !== undefined && (
+                            <div className="text-xs text-gray-400">
+                              Downloads: {user.downloadCount || 0}/5
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           user.isActive 
                             ? 'bg-green-500/20 text-green-400' 
@@ -1197,6 +1243,38 @@ const UserManagement = () => {
                             <Edit className="h-5 w-5" />
                           </button>
                           <button
+                            onClick={async () => {
+                              const newType = isPremium ? 'free' : 'premium';
+                              const newStatus = isPremium ? 'expired' : 'active';
+                              try {
+                                const token = localStorage.getItem('adminToken');
+                                await axios.patch(`/api/admin/users/${user._id}/subscription`, {
+                                  subscriptionType: newType,
+                                  subscriptionStatus: newStatus,
+                                  subscriptionStartDate: newType === 'premium' ? new Date() : user.subscriptionStartDate,
+                                  subscriptionEndDate: newType === 'premium' ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) : null
+                                }, {
+                                  headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                fetchUsers();
+                              } catch (error) {
+                                alert('Error updating subscription: ' + (error.response?.data?.message || error.message));
+                              }
+                            }}
+                            className={`${
+                              isPremium 
+                                ? 'text-orange-400 hover:text-orange-300' 
+                                : 'text-yellow-400 hover:text-yellow-300'
+                            }`}
+                            title={isPremium ? 'Downgrade to Free' : 'Upgrade to Premium'}
+                          >
+                            {isPremium ? (
+                              <span className="text-xs">⬇️</span>
+                            ) : (
+                              <span className="text-xs">⬆️</span>
+                            )}
+                          </button>
+                          <button
                             onClick={() => toggleUserStatus(user._id, user.isActive)}
                             className={`${
                               user.isActive 
@@ -1221,7 +1299,8 @@ const UserManagement = () => {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1233,6 +1312,8 @@ const UserManagement = () => {
               <div className="flex space-x-4">
                 <span>Active: {users.filter(u => u.isActive).length}</span>
                 <span>Admins: {users.filter(u => u.role === 'admin').length}</span>
+                <span>Premium: {users.filter(u => u.subscriptionType === 'premium' && u.subscriptionStatus === 'active').length}</span>
+                <span>Free: {users.filter(u => u.subscriptionType === 'free' || u.subscriptionStatus !== 'active').length}</span>
               </div>
             </div>
           </div>
@@ -1353,17 +1434,48 @@ const UserForm = ({ user, onClose, onSave }) => {
             </select>
           </div>
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isActive"
-              checked={formData.isActive}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="h-4 w-4 text-[#e50914] focus:ring-[#e50914] border-gray-500 rounded bg-white/5"
-            />
-            <label htmlFor="isActive" className="ml-2 text-sm text-gray-300">
-              Active user
-            </label>
+          <div className="space-y-3">
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={formData.isActive}
+                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                className="h-4 w-4 text-[#e50914] focus:ring-[#e50914] border-gray-500 rounded bg-white/5"
+              />
+              <label htmlFor="isActive" className="ml-2 text-sm text-gray-300">
+                Active user
+              </label>
+            </div>
+            
+            {user && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Subscription Type</label>
+                  <select
+                    value={formData.subscriptionType}
+                    onChange={(e) => setFormData({ ...formData, subscriptionType: e.target.value })}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
+                  >
+                    <option value="free">Free</option>
+                    <option value="premium">Premium</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Subscription Status</label>
+                  <select
+                    value={formData.subscriptionStatus}
+                    onChange={(e) => setFormData({ ...formData, subscriptionStatus: e.target.value })}
+                    className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-md text-white focus:outline-none focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]"
+                  >
+                    <option value="active">Active</option>
+                    <option value="expired">Expired</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="flex justify-end space-x-4 pt-4">

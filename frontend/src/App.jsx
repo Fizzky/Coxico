@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useParams, useNavigate, u
 import {
   BookOpen, Search, Menu, X, User, Eye, Star, ArrowLeft, ArrowRight,
   ChevronLeft, ChevronRight, LogIn, UserPlus, Heart, History, LogOut, SlidersHorizontal,
-  TrendingUp, Crown  // Add these two missing imports
+  TrendingUp, Crown, MessageSquare  // Add MessageSquare for feedback
 } from 'lucide-react';
 import axios from 'axios';
 import './App.css';
@@ -16,8 +16,10 @@ import AdminWithAuth from './AdminPanel.jsx';
 import ReadingHistory from './pages/ReadingHistory';
 import ImprovedProfilePage from './pages/ImprovedProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
+import FeedbackModal from './components/FeedbackModal';
 
-axios.defaults.baseURL = 'http://localhost:5000';
+// Use environment variable for API URL, fallback to localhost for development
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // ---------------------- Protected Route Component ----------------------
 const AdminRoute = ({ children }) => {
@@ -39,6 +41,7 @@ const AdminRoute = ({ children }) => {
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -266,6 +269,12 @@ const Header = () => {
                     <Link to="/reading-history" className="block px-4 py-2 text-sm text-gray-200 hover:bg-white/10" onClick={() => setIsMenuOpen(false)}>
                       <History className="h-4 w-4 inline mr-2" /> Reading History
                     </Link>
+                    <button
+                      onClick={() => { setIsFeedbackOpen(true); setIsMenuOpen(false); }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-white/10"
+                    >
+                      <MessageSquare className="h-4 w-4 inline mr-2" /> Send Feedback
+                    </button>
                     <div className="my-1 border-t border-white/10" />
                     <button
                       onClick={() => { logout(); setIsMenuOpen(false); }}
@@ -433,6 +442,9 @@ const Header = () => {
           </div>
         </div>
       )}
+
+      {/* Feedback Modal */}
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </header>
   );
 };
@@ -617,11 +629,12 @@ const getTimeAgo = (date) => {
 
 // ---------------------- Home (billboard + rows) ----------------------
 const HomePage = () => {
-  const { user } = useAuth(); // ADD THIS LINE
+  const { user, favorites, continueReading, fetchReadingHistory, isAuthenticated } = useAuth();
   const [manga, setManga] = useState([]);
   const [featuredManga, setFeaturedManga] = useState(null);
   const [isFading, setIsFading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [readingHistory, setReadingHistory] = useState([]);
 
   useEffect(() => {
   fetchManga();
@@ -634,6 +647,17 @@ const HomePage = () => {
   
   return () => clearInterval(interval); // Cleanup on unmount
 }, []);
+
+  // Fetch reading history when user is authenticated
+  useEffect(() => {
+    if (isAuthenticated()) {
+      fetchReadingHistory(1, 'all').then(({ history }) => {
+        setReadingHistory(history || []);
+      });
+    } else {
+      setReadingHistory([]);
+    }
+  }, [isAuthenticated, fetchReadingHistory, user]);
 
   const fetchManga = async () => {
   try {
@@ -762,11 +786,132 @@ setTimeout(() => {
 
   const latest = [...manga].slice(0, 18);
   const trending = [...manga].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 18);
-  const becauseYouLiked = featuredManga
-    ? [...manga].filter((m) =>
-        (m.genres || []).some((g) => (featuredManga.genres || []).includes(g))
-      ).slice(0, 18)
-    : [];
+  
+  // Personalized recommendations based on user preferences
+  const getPersonalizedRecommendations = () => {
+    if (!isAuthenticated() || (!favorites?.length && !readingHistory?.length && !continueReading?.length)) {
+      // Fallback to featured manga for non-authenticated users or users with no preferences
+      if (featuredManga) {
+        return {
+          recommendations: [...manga].filter((m) => {
+            if (m._id === featuredManga._id) return false; // Exclude featured manga itself
+            return (m.genres || []).some((g) => (featuredManga.genres || []).includes(g));
+          }).slice(0, 18),
+          title: `Because You Liked ${featuredManga?.title}`
+        };
+      }
+      return { recommendations: [], title: '' };
+    }
+
+    // Collect all user-preferred manga IDs
+    const userMangaIds = new Set();
+    
+    // Add favorites
+    favorites?.forEach(fav => {
+      const favId = fav._id || fav;
+      if (favId) userMangaIds.add(favId.toString());
+    });
+    
+    // Add reading history manga
+    readingHistory?.forEach(entry => {
+      if (entry.manga?._id) {
+        userMangaIds.add(entry.manga._id.toString());
+      } else if (entry.manga) {
+        userMangaIds.add(entry.manga.toString());
+      }
+    });
+    
+    // Add continue reading manga
+    continueReading?.forEach(entry => {
+      if (entry.manga?._id) {
+        userMangaIds.add(entry.manga._id.toString());
+      } else if (entry.manga) {
+        userMangaIds.add(entry.manga.toString());
+      }
+    });
+
+    // Get all user-preferred manga from the full list
+    const userPreferredManga = manga.filter(m => {
+      const mangaId = m._id?.toString() || m._id;
+      return userMangaIds.has(mangaId);
+    });
+
+    if (userPreferredManga.length === 0) {
+      // Fallback if we can't find the manga in the list
+      if (featuredManga) {
+        return {
+          recommendations: [...manga].filter((m) => {
+            if (m._id === featuredManga._id) return false;
+            return (m.genres || []).some((g) => (featuredManga.genres || []).includes(g));
+          }).slice(0, 18),
+          title: `Because You Liked ${featuredManga?.title}`
+        };
+      }
+      return { recommendations: [], title: '' };
+    }
+
+    // Extract all genres from user's preferred manga
+    const preferredGenres = new Map();
+    userPreferredManga.forEach(m => {
+      (m.genres || []).forEach(genre => {
+        preferredGenres.set(genre, (preferredGenres.get(genre) || 0) + 1);
+      });
+    });
+
+    // Sort genres by frequency (most liked genres first)
+    const sortedGenres = Array.from(preferredGenres.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([genre]) => genre);
+
+    // Score and rank recommendations
+    const scoredManga = manga
+      .filter(m => {
+        const mangaId = m._id?.toString() || m._id;
+        return !userMangaIds.has(mangaId); // Exclude already liked/read manga
+      })
+      .map(m => {
+        let score = 0;
+        const mangaGenres = m.genres || [];
+        
+        // Score based on genre matches (weighted by frequency)
+        sortedGenres.forEach((genre, index) => {
+          if (mangaGenres.includes(genre)) {
+            // Higher score for more frequently liked genres
+            score += (sortedGenres.length - index) * 10;
+          }
+        });
+        
+        // Boost score for higher rated manga
+        score += (m.rating || 0) * 5;
+        
+        // Boost score for popular manga
+        score += Math.log10((m.views || 0) + 1) * 2;
+        
+        return { ...m, _recommendationScore: score };
+      })
+      .filter(m => m._recommendationScore > 0) // Only include manga with some match
+      .sort((a, b) => b._recommendationScore - a._recommendationScore)
+      .slice(0, 18)
+      .map(({ _recommendationScore, ...m }) => m); // Remove score before returning
+
+    // Generate title based on user's most liked genre or favorite manga
+    let title = 'Recommended For You';
+    if (sortedGenres.length > 0) {
+      title = `Because You Like ${sortedGenres[0]}`;
+    } else if (userPreferredManga.length > 0) {
+      const topFavorite = userPreferredManga[0];
+      title = `Because You Liked ${topFavorite.title}`;
+    }
+
+    return {
+      recommendations: scoredManga,
+      title
+    };
+  };
+
+  const personalizedRecs = getPersonalizedRecommendations();
+  const becauseYouLiked = personalizedRecs.recommendations;
+  const recommendationTitle = personalizedRecs.title;
 
  return (
   <div className="min-h-screen bg-[#141414] text-white">
@@ -859,7 +1004,7 @@ setTimeout(() => {
 
       <Row title="Latest Manga" items={latest} />
       {becauseYouLiked.length > 0 && (
-        <Row title={`Because You Liked ${featuredManga?.title}`} items={becauseYouLiked} />
+        <Row title={recommendationTitle} items={becauseYouLiked} />
       )}
     </div>
   );
@@ -1707,8 +1852,8 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
         case 'rating_asc': return (a.rating || 0) - (b.rating || 0);
         case 'views_desc': return (b.views || 0) - (a.views || 0);
         case 'views_asc': return (a.views || 0) - (b.views || 0);
-        case 'chapters_desc': return (b.chapters || 0) - (a.chapters || 0);
-        case 'chapters_asc': return (a.chapters || 0) - (b.chapters || 0);
+        case 'chapters_desc': return (b.totalChapters || 0) - (a.totalChapters || 0);
+        case 'chapters_asc': return (a.totalChapters || 0) - (b.totalChapters || 0);
         default: return 0;
       }
     });
@@ -1890,7 +2035,7 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
                     {/* Chapter Count */}
                     <div className="absolute bottom-2 right-2">
                       <span className="bg-black/70 px-2 py-1 rounded text-xs">
-                        {mangaItem.chapters || 0} Ch
+                        {mangaItem.totalChapters || 0} Ch
                       </span>
                     </div>
                   </div>
