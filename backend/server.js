@@ -83,8 +83,9 @@ const allowedOrigins = [
   'https://www.coxico.xyz',
   'https://coxico.xyz',
   'https://coxico-1g917f1z6-hafizs-projects-12fe0b3f.vercel.app',
-  'https://coxico.vercel.app' // Will work once domain is connected
-];
+  'https://coxico.vercel.app',
+  process.env.FRONTEND_URL // Dynamic frontend URL from environment
+].filter(Boolean); // Remove undefined values
 
 // Add FRONTEND_URL from environment if specified
 if (process.env.FRONTEND_URL) {
