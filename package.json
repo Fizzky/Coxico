@@ -1,8 +1,9 @@
 {
-  "dependencies": {
-    "bcryptjs": "^3.0.2",
-    "connect-timeout": "^1.9.1",
-    "express-validator": "^7.2.1",
-    "jsonwebtoken": "^9.0.2"
+  "name": "coxico-monorepo",
+  "version": "1.0.0",
+  "description": "Coxico manga reader platform",
+  "scripts": {
+    "build": "cd backend && npm install",
+    "start": "cd backend && npm start"
   }
 }
