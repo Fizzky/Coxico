@@ -219,7 +219,9 @@ const Header = () => {
       <div className="header-content">
         {/* Left / Center: Primary nav */}
         <nav className="nav-primary">
-          <Link to="/" className="logo">MANGAREAD</Link>
+          <Link to="/" className="logo">
+            <img src="/logo.png" alt="Coxico" className="logo-img" />
+          </Link>
 
           <Link to="/" className="nav-link">Home</Link>
           <Link to="/browse" className="nav-link">Browse</Link>
@@ -2549,10 +2551,10 @@ const Login = () => {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-[#e50914] mb-2">MANGAREAD</h1>
+          <img src="/logo.png" alt="Coxico" className="auth-logo" />
           <h2 className="text-3xl font-bold text-white mb-2">Sign In</h2>
           <p className="text-white/70">
-            New to MangaReader?{' '}
+            New to Coxico?{' '}
             <Link to="/signup" className="text-white hover:underline font-semibold">
               Sign up now
             </Link>
@@ -2675,7 +2677,7 @@ const Signup = () => {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-[#e50914] mb-2">MANGAREAD</h1>
+          <img src="/logo.png" alt="Coxico" className="auth-logo" />
           <h2 className="text-3xl font-bold text-white mb-2">Create your account</h2>
           <p className="text-white/70">
             Already have an account?{' '}
@@ -3833,7 +3835,7 @@ const ForgotPasswordPage = () => {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-[#e50914] mb-2">MANGAREAD</h1>
+          <img src="/logo.png" alt="Coxico" className="auth-logo" />
           <h2 className="text-3xl font-bold text-white mb-2">Reset Password</h2>
           <p className="text-white/70">
             Enter your email to receive a password reset link
@@ -3943,7 +3945,7 @@ const ResetPasswordPage = () => {
   return (
     <div className="min-h-screen bg-[#141414] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h1 className="text-4xl font-bold text-[#e50914] text-center mb-2">MANGAREAD</h1>
+        <img src="/logo.png" alt="Coxico" className="auth-logo mx-auto mb-2" />
         <h2 className="text-3xl font-bold text-white text-center">Reset Password</h2>
       </div>
 

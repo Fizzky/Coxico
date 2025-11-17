@@ -98,7 +98,7 @@ const AdminLogin = () => {
     <div className="fixed inset-0 min-h-screen bg-[#141414] flex items-center justify-center px-4 z-[9999]">
       <div className="max-w-md w-full bg-black/60 backdrop-blur-md rounded-lg shadow-2xl p-8 border border-white/10">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">MANGAREAD</h2>
+          <img src="/logo.png" alt="Coxico" className="admin-logo" />
           <p className="text-gray-400">Admin Panel</p>
         </div>
 
@@ -1519,7 +1519,7 @@ const AdminPanel = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-[#e50914]">MANGAREAD</h1>
+              <img src="/logo.png" alt="Coxico" className="admin-header-logo" />
               <span className="text-gray-400">Admin Panel</span>
             </div>
             <div className="flex items-center space-x-4">
