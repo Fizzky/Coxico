@@ -47,8 +47,29 @@ import feedbackRoutes from './routes/feedback.js';
 
 const app = express();
 
+// HTTPS enforcement in production
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    // Check if request is secure (handled by Railway/Vercel reverse proxy)
+    if (req.header('x-forwarded-proto') !== 'https' && req.header('host') !== `localhost:${process.env.PORT}`) {
+      return res.redirect(`https://${req.header('host')}${req.url}`);
+    }
+    next();
+  });
+}
+
 //Security middleware
-app.use(helmet())
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false // Allow embedding if needed
+}));
 app.use(mongoSanitize())
 app.use(xss())
 app.use(hpp())
@@ -66,15 +87,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting - ONLY protect auth
+// Rate limiting - Protect auth routes
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
-  message: 'Too many login attempts'
+  message: 'Too many login attempts, please try again later'
+});
+
+// General API rate limiting (protect against DDoS)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per 15 minutes
+  message: 'Too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false
 });
 
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+app.use("/api/", apiLimiter); // Apply to all API routes except auth (which has stricter limits)
 
 // ---------- CORS Configuration (Production Ready) ----------
 const allowedOrigins = [
@@ -131,6 +162,37 @@ app.use("/api/auth", authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/feedback', feedbackRoutes);
+
+// ---------- Global Error Handler Middleware (MUST be after routes) ----------
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  
+  // Don't expose error details in production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  // Handle specific error types
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ 
+      message: 'Validation error',
+      errors: isDevelopment ? err.errors : undefined
+    });
+  }
+  
+  if (err.name === 'UnauthorizedError' || err.name === 'JsonWebTokenError') {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
+  
+  // Default error response
+  res.status(err.status || 500).json({ 
+    message: err.message || 'Server error',
+    ...(isDevelopment && { stack: err.stack })
+  });
+});
+
+// ---------- 404 Handler ----------
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
 
 // ---------- Basic health check route ----------
 app.get('/api/health', (req, res) => {

@@ -297,7 +297,7 @@ router.post('/manga/:mangaId/add-volumes', adminAuth, async (req, res) => {
 
   } catch (error) {
     console.error('Add volumes error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to add volumes' });
   }
 });
 
@@ -369,7 +369,7 @@ router.post('/create-manga-with-volumes', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Create manga with volumes error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to create manga with volumes' });
   }
 });
 
@@ -446,7 +446,7 @@ router.post('/create-manga', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Create manga error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to create manga' });
   }
 });
 
@@ -555,7 +555,7 @@ router.get('/manga', adminAuth, async (req, res) => {
     res.json({ manga: mangaWithChapterCounts });
   } catch (error) {
     console.error('Get admin manga error:', error);
-    res.status(500).json({ message: 'Server error: ' + error.message });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -628,7 +628,7 @@ router.get('/manga/:mangaId/chapters', adminAuth, async (req, res) => {
     res.json({ chapters });
   } catch (error) {
     console.error('Get chapters error:', error);
-    res.status(500).json({ message: 'Server error: ' + error.message });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -710,7 +710,7 @@ router.post('/users', adminAuth, async (req, res) => {
     res.json({ message: 'User created successfully', user: user.toJSON() });
   } catch (error) {
     console.error('Error creating user:', error);
-    res.status(500).json({ message: 'Error creating user: ' + error.message });
+    res.status(500).json({ message: 'Error creating user' });
   }
 });
 
@@ -742,7 +742,7 @@ router.patch('/users/:id/subscription', adminAuth, async (req, res) => {
     res.json({ message: 'Subscription updated successfully', user });
   } catch (error) {
     console.error('❌ Error updating subscription:', error);
-    res.status(500).json({ message: 'Error updating subscription: ' + error.message });
+    res.status(500).json({ message: 'Error updating subscription' });
   }
 });
 
@@ -776,7 +776,7 @@ router.put('/users/:id', adminAuth, async (req, res) => {
     res.json({ message: 'User updated successfully', user });
   } catch (error) {
     console.error('Error updating user:', error);
-    res.status(500).json({ message: 'Error updating user: ' + error.message });
+    res.status(500).json({ message: 'Error updating user' });
   }
 });
 
@@ -829,7 +829,7 @@ router.get('/stats', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Get stats error:', error);
-    res.status(500).json({ message: 'Server error: ' + error.message });
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -867,7 +867,7 @@ router.post('/cleanup-orphaned-chapters/:mangaId', adminAuth, async (req, res) =
     });
   } catch (error) {
     console.error('Cleanup error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: 'Cleanup failed' });
   }
 });
 

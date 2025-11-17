@@ -108,7 +108,7 @@ router.post('/revenuecat', express.raw({ type: 'application/json' }), verifyWebh
   } catch (error) {
     console.error('❌ Error processing webhook:', error);
     // Still return 200 to prevent RevenueCat from retrying
-    res.status(200).json({ error: error.message });
+    res.status(200).json({ error: 'Webhook processing failed' });
   }
 });
 
