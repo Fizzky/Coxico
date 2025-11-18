@@ -648,6 +648,7 @@ const HomePage = () => {
   const [isFading, setIsFading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [readingHistory, setReadingHistory] = useState([]);
+  const [mangaLoading, setMangaLoading] = useState(true);
 
   useEffect(() => {
   fetchManga();
@@ -674,6 +675,7 @@ const HomePage = () => {
 
   const fetchManga = async () => {
   try {
+    setMangaLoading(true);
     const response = await axios.get('/api/manga/with-chapters');
     const mangaList = response.data.manga || [];
     setManga(mangaList);
@@ -1013,12 +1015,19 @@ setTimeout(() => {
       </div>
     </section>
 
-    <Row title="🔥 Hot Manga" items={trending.slice(0, 12)} />
-
-      <Row title="Latest Manga" items={latest} />
-      {becauseYouLiked.length > 0 && (
-        <Row title={recommendationTitle} items={becauseYouLiked} />
-      )}
+    {mangaLoading ? (
+      <div className="flex justify-center items-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+      </div>
+    ) : (
+      <>
+        <Row title="🔥 Hot Manga" items={trending.slice(0, 12)} />
+        <Row title="Latest Manga" items={latest} />
+        {becauseYouLiked.length > 0 && (
+          <Row title={recommendationTitle} items={becauseYouLiked} />
+        )}
+      </>
+    )}
     </div>
   );
 };
