@@ -18,6 +18,7 @@ import {
   User
 } from 'lucide-react';
 import axios from 'axios';
+import logoImage from './assets/logo.png';
 
 // Auth context for admin
 const AdminAuthContext = createContext();
@@ -98,7 +99,7 @@ const AdminLogin = () => {
     <div className="fixed inset-0 min-h-screen bg-[#141414] flex items-center justify-center px-4 z-[9999]">
       <div className="max-w-md w-full bg-black/60 backdrop-blur-md rounded-lg shadow-2xl p-8 border border-white/10">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Coxico" className="admin-logo" />
+          <img src={logoImage} alt="Coxico" className="admin-logo" />
           <p className="text-gray-400">Admin Panel</p>
         </div>
 
@@ -1519,7 +1520,7 @@ const AdminPanel = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <img src="/logo.png" alt="Coxico" className="admin-header-logo" />
+              <img src={logoImage} alt="Coxico" className="admin-header-logo" />
               <span className="text-gray-400">Admin Panel</span>
             </div>
             <div className="flex items-center space-x-4">

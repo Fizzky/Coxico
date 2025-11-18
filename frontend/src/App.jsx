@@ -17,6 +17,7 @@ import ReadingHistory from './pages/ReadingHistory';
 import ImprovedProfilePage from './pages/ImprovedProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
 import FeedbackModal from './components/FeedbackModal';
+import logoImage from './assets/logo.png';
 
 // Use environment variable for API URL, fallback to localhost for development
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -220,7 +221,11 @@ const Header = () => {
         {/* Left / Center: Primary nav */}
         <nav className="nav-primary">
           <Link to="/" className="logo">
-            <img src="/logo.png" alt="Coxico" className="logo-img" />
+            <img 
+              src={logoImage} 
+              alt="Coxico" 
+              className="logo-img"
+            />
           </Link>
 
           <Link to="/" className="nav-link">Home</Link>
@@ -2551,7 +2556,7 @@ const Login = () => {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="text-center">
-          <img src="/logo.png" alt="Coxico" className="auth-logo" />
+          <img src={logoImage} alt="Coxico" className="auth-logo" />
           <h2 className="text-3xl font-bold text-white mb-2">Sign In</h2>
           <p className="text-white/70">
             New to Coxico?{' '}
@@ -2677,7 +2682,7 @@ const Signup = () => {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="text-center">
-          <img src="/logo.png" alt="Coxico" className="auth-logo" />
+          <img src={logoImage} alt="Coxico" className="auth-logo" />
           <h2 className="text-3xl font-bold text-white mb-2">Create your account</h2>
           <p className="text-white/70">
             Already have an account?{' '}
@@ -3835,7 +3840,7 @@ const ForgotPasswordPage = () => {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="text-center">
-          <img src="/logo.png" alt="Coxico" className="auth-logo" />
+          <img src={logoImage} alt="Coxico" className="auth-logo" />
           <h2 className="text-3xl font-bold text-white mb-2">Reset Password</h2>
           <p className="text-white/70">
             Enter your email to receive a password reset link
@@ -3945,7 +3950,7 @@ const ResetPasswordPage = () => {
   return (
     <div className="min-h-screen bg-[#141414] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <img src="/logo.png" alt="Coxico" className="auth-logo mx-auto mb-2" />
+        <img src={logoImage} alt="Coxico" className="auth-logo mx-auto mb-2" />
         <h2 className="text-3xl font-bold text-white text-center">Reset Password</h2>
       </div>
 
