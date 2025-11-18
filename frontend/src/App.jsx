@@ -20,7 +20,8 @@ import FeedbackModal from './components/FeedbackModal';
 import logoImage from './assets/logo.png';
 
 // Use environment variable for API URL, fallback to localhost for development
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { apiUrl } from './utils/api';
+axios.defaults.baseURL = apiUrl;
 
 // ---------------------- Protected Route Component ----------------------
 const AdminRoute = ({ children }) => {
@@ -2126,7 +2127,7 @@ const FavoritesPage = () => {
           return;
         }
 
-        const response = await fetch('http://localhost:5000/api/auth/favorites', {
+        const response = await fetch(`${apiUrl}/api/auth/favorites`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

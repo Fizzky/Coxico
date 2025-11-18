@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Camera, X, Upload } from 'lucide-react';
 import { useAuth } from '../components/AuthContext';
+import { apiUrl } from '../utils/api';
 
 export default function EditProfilePage() {
   const { user, token, updateUser } = useAuth();
@@ -36,10 +37,10 @@ export default function EditProfilePage() {
       });
       
       if (user.profilePhoto) {
-        setProfilePhotoPreview(`http://localhost:5000${user.profilePhoto}`);
+        setProfilePhotoPreview(`${apiUrl}${user.profilePhoto}`);
       }
       if (user.bannerPhoto) {
-        setBannerPhotoPreview(`http://localhost:5000${user.bannerPhoto}`);
+        setBannerPhotoPreview(`${apiUrl}${user.bannerPhoto}`);
       }
     }
   }, [user]);
@@ -121,7 +122,7 @@ export default function EditProfilePage() {
       if (profilePhoto) formDataToSend.append('profilePhoto', profilePhoto);
       if (bannerPhoto) formDataToSend.append('bannerPhoto', bannerPhoto);
 
-      const response = await fetch('http://localhost:5000/api/auth/profile', {
+      const response = await fetch(`${apiUrl}/api/auth/profile`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` },
         body: formDataToSend

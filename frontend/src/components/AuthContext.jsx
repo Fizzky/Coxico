@@ -1,6 +1,7 @@
 // frontend/src/components/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { apiUrl } from '../utils/api';
 
 const AuthContext = createContext();
 
@@ -40,7 +41,7 @@ function AuthProvider({ children }) {
     if (!token) return;
     
     try {
-      const response = await axios.get('http://localhost:5000/api/auth/favorites');
+      const response = await axios.get('/api/auth/favorites');
       setFavorites(response.data.favorites || []);
     } catch (error) {
       console.error('Error fetching favorites:', error);
@@ -130,7 +131,7 @@ function AuthProvider({ children }) {
     try {
       if (!token) return { success: false, message: 'Not authenticated' };
 
-      const response = await axios.post('http://localhost:5000/api/auth/reading-progress', {
+      const response = await axios.post('/api/auth/reading-progress', {
         mangaId,
         chapterId, 
         chapterNumber,
@@ -161,7 +162,7 @@ function AuthProvider({ children }) {
     try {
       if (!token) return;
       
-      const response = await axios.get('http://localhost:5000/api/auth/continue-reading');
+      const response = await axios.get('/api/auth/continue-reading');
       setContinueReading(response.data.continueReading || []);
     } catch (error) {
       console.error('Error fetching continue reading:', error);
@@ -174,7 +175,7 @@ function AuthProvider({ children }) {
     try {
       if (!token) return { history: [], pagination: {} };
       
-      const response = await axios.get(`http://localhost:5000/api/auth/reading-history?page=${page}&filter=${filter}`);
+      const response = await axios.get(`/api/auth/reading-history?page=${page}&filter=${filter}`);
       return {
         history: response.data.history || [],
         pagination: response.data.pagination || {}
@@ -190,7 +191,7 @@ function AuthProvider({ children }) {
     try {
       if (!token) return;
       
-      const response = await axios.get('http://localhost:5000/api/auth/reading-stats');
+      const response = await axios.get('/api/auth/reading-stats');
       setReadingStats(response.data);
     } catch (error) {
       console.error('Error fetching reading stats:', error);
@@ -230,7 +231,7 @@ function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
+      const response = await axios.post('/api/auth/login', {
         email,
         password
       });
@@ -254,7 +255,7 @@ function AuthProvider({ children }) {
 
   const register = async (username, email, password) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', {
+      const response = await axios.post('/api/auth/register', {
         username,
         email,
         password

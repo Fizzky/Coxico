@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, Trash2, Book, Calendar, Filter, Search } from 'lucide-react';
 import { useAuth } from "../components/AuthContext";
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom';
+import { apiUrl } from '../utils/api';
 
 export default function ReadingHistoryPage() {
   const { token } = useAuth();
@@ -25,7 +26,7 @@ export default function ReadingHistoryPage() {
     try {
       setLoading(true);
       const response = await fetch(
-        `http://localhost:5000/api/auth/reading-history?filter=${filterType}&limit=50`,
+        `${apiUrl}/api/auth/reading-history?filter=${filterType}&limit=50`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -43,7 +44,7 @@ export default function ReadingHistoryPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/reading-stats', {
+      const response = await fetch(`${apiUrl}/api/auth/reading-stats`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
