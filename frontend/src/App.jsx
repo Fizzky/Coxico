@@ -220,23 +220,18 @@ const Header = () => {
       <div className="header-content">
         {/* Left / Center: Primary nav */}
         <nav className="nav-primary">
-          <Link to="/" className="logo" style={{ display: 'flex', alignItems: 'center' }}>
+          <Link to="/" className="logo" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
             <img 
               src={logoImage} 
-              alt="Coxico" 
+              alt="Coxico Logo" 
               className="logo-img"
-              style={{ display: 'block', maxWidth: '100%', height: '32px', width: 'auto' }}
+              style={{ height: '32px', width: 'auto', display: 'block' }}
               onError={(e) => {
-                console.error('Logo failed to load:', e.target.src);
-                // Hide broken image and show text fallback
+                console.error('Logo failed to load:', logoImage, e.target.src);
                 e.target.style.display = 'none';
-                const fallback = e.target.parentNode.querySelector('.logo-fallback');
-                if (fallback) fallback.style.display = 'block';
               }}
             />
-            <span className="logo-fallback" style={{ display: 'none', color: '#e50914', fontSize: '24px', fontWeight: 'bold', marginLeft: '8px' }}>
-              COXICO
-            </span>
+            <span style={{ display: 'none' }}>COXICO</span>
           </Link>
 
           <Link to="/" className="nav-link">Home</Link>
