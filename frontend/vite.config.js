@@ -26,6 +26,17 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: process.env.NODE_ENV !== 'production' // Only enable source maps in development
+    sourcemap: process.env.NODE_ENV !== 'production', // Only enable source maps in development
+    rollupOptions: {
+      output: {
+        assetFileNames: (assetInfo) => {
+          // Force new hash for logo to bust cache
+          if (assetInfo.name === 'logo.png') {
+            return 'assets/logo-[hash][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
+        }
+      }
+    }
   }
 })
