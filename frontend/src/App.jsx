@@ -676,48 +676,26 @@ const HomePage = () => {
   const fetchManga = async () => {
   try {
     setMangaLoading(true);
-    const response = await axios.get('/api/manga/with-chapters');
+    // Use lighter endpoint without chapters/volumes for faster loading
+    const response = await axios.get('/api/manga');
     const mangaList = response.data.manga || [];
     setManga(mangaList);
 
-    console.log('=== FEATURED MANGA DEBUG ===');
-    console.log('Total manga received:', mangaList.length);
-    
     if (mangaList.length > 0) {
-      // Debug: Check what data we have
-      mangaList.forEach(manga => {
-        console.log(`\nManga: ${manga.title}`);
-        console.log('  Has chapters array:', manga.chapters?.length || 0);
-        console.log('  Has volumes array:', manga.volumes?.length || 0);
-        
-        if (manga.chapters && manga.chapters.length > 0) {
-          console.log('  Sample chapter uploadedAt:', manga.chapters[0].uploadedAt);
-        }
-        if (manga.volumes && manga.volumes.length > 0 && manga.volumes[0].chapters) {
-          console.log('  Sample volume chapter uploadedAt:', manga.volumes[0].chapters[0]?.uploadedAt);
-        }
-      });
-
-      // Find manga with the most recent chapter upload
-      if (mangaList.length > 0) {
-  // Rotate every 30 seconds
-const now = new Date();
-const secondsPassed = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-const thirtySecondBlocks = Math.floor(secondsPassed / 30);
-const rotationIndex = thirtySecondBlocks % mangaList.length;
-  
-  // Trigger fade out, then change manga, then fade in
-setTimeout(() => {
-  setFeaturedManga(mangaList[rotationIndex]);
-  setIsFading(false);
-}, 300); // 300ms fade out duration
-  
-  console.log(`🔄 30-sec rotation: Block ${thirtySecondBlocks}, Index ${rotationIndex}, Showing: ${mangaList[rotationIndex].title}`);
-}
+      // Rotate featured manga every 30 seconds
+      const now = new Date();
+      const secondsPassed = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      const thirtySecondBlocks = Math.floor(secondsPassed / 30);
+      const rotationIndex = thirtySecondBlocks % mangaList.length;
+      
+      // Set featured manga immediately
+      setFeaturedManga(mangaList[rotationIndex]);
+      setIsFading(false);
     }
   } catch (error) {
     console.error('Error fetching manga:', error);
   } finally {
+    setMangaLoading(false);
     setLoading(false);
   }
 };
