@@ -225,13 +225,12 @@ const Header = () => {
               src={logoImage} 
               alt="Coxico Logo" 
               className="logo-img"
-              style={{ height: '32px', width: 'auto', display: 'block' }}
+              style={{ height: '32px', width: 'auto', display: 'block', objectFit: 'contain' }}
               onError={(e) => {
                 console.error('Logo failed to load:', logoImage, e.target.src);
                 e.target.style.display = 'none';
               }}
             />
-            <span style={{ display: 'none' }}>COXICO</span>
           </Link>
 
           <Link to="/" className="nav-link">Home</Link>
