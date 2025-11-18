@@ -225,7 +225,7 @@ const Header = () => {
               src={logoImage} 
               alt="Coxico Logo" 
               className="logo-img"
-              style={{ height: '32px', width: 'auto', display: 'block', objectFit: 'contain' }}
+              style={{ height: '48px', width: 'auto', display: 'block', objectFit: 'contain' }}
               onError={(e) => {
                 console.error('Logo failed to load:', logoImage, e.target.src);
                 e.target.style.display = 'none';
