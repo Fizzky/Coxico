@@ -782,17 +782,9 @@ const HomePage = () => {
   
   // Personalized recommendations based on user preferences
   const getPersonalizedRecommendations = () => {
+    // Only show recommendations if user has actual preferences (favorites, reading history, or continue reading)
     if (!isAuthenticated() || (!favorites?.length && !readingHistory?.length && !continueReading?.length)) {
-      // Fallback to featured manga for non-authenticated users or users with no preferences
-      if (featuredManga) {
-        return {
-          recommendations: [...manga].filter((m) => {
-            if (m._id === featuredManga._id) return false; // Exclude featured manga itself
-            return (m.genres || []).some((g) => (featuredManga.genres || []).includes(g));
-          }).slice(0, 18),
-          title: `Because You Liked ${featuredManga?.title}`
-        };
-      }
+      // Don't show recommendations for users with no preferences
       return { recommendations: [], title: '' };
     }
 
@@ -830,16 +822,7 @@ const HomePage = () => {
     });
 
     if (userPreferredManga.length === 0) {
-      // Fallback if we can't find the manga in the list
-      if (featuredManga) {
-        return {
-          recommendations: [...manga].filter((m) => {
-            if (m._id === featuredManga._id) return false;
-            return (m.genres || []).some((g) => (featuredManga.genres || []).includes(g));
-          }).slice(0, 18),
-          title: `Because You Liked ${featuredManga?.title}`
-        };
-      }
+      // No preferences found, don't show recommendations
       return { recommendations: [], title: '' };
     }
 
