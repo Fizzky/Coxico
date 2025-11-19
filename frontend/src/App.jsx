@@ -900,7 +900,7 @@ const HomePage = () => {
 
  return (
   <div className="min-h-screen bg-[#141414] text-white">
-    <section className="billboard" style={{ position: 'relative', overflow: 'hidden', height: '60vh', backgroundColor: '#141414', opacity: isFading ? 0 : 1, transition: 'opacity 0.5s ease-in-out' }}>
+    <section className="billboard" style={{ position: 'relative', overflow: 'visible', height: '60vh', backgroundColor: '#141414', opacity: isFading ? 0 : 1, transition: 'opacity 0.5s ease-in-out' }}>
       {/* Blurred Background Layer - Full Width */}
       {featuredManga?.coverImage && (
         <div className="billboard-bg" style={{

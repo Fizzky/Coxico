@@ -70,9 +70,10 @@ body.search-open { overflow: hidden; }
 @media (max-width: 768px) {
   .billboard {
     height: auto;
-    min-height: auto;
+    min-height: 280px;
     padding: 60px 16px 24px 16px;
     align-items: flex-start;
+    overflow: visible !important;
   }
   .billboard-content {
     max-width: calc(100% - 140px);
@@ -124,6 +125,7 @@ body.search-open { overflow: hidden; }
   }
   /* Show cover image on mobile but make it smaller and positioned better */
   .billboard-cover {
+    display: block !important;
     position: absolute !important;
     top: 50% !important;
     right: 16px !important;
@@ -131,15 +133,18 @@ body.search-open { overflow: hidden; }
     transform: translateY(-50%) !important;
     height: 200px !important;
     width: auto !important;
-    z-index: 1 !important;
-    opacity: 0.95;
+    z-index: 10 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
   }
   .billboard-cover img {
+    display: block !important;
     height: 100% !important;
     width: auto !important;
     max-width: 130px;
     border-radius: 6px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.7) !important;
+    object-fit: contain !important;
   }
   /* Stronger dark overlay for better text readability on mobile */
   .billboard-bg > div {
