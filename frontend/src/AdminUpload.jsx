@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { Upload, X, Plus, Check, AlertCircle, FolderUp, Package, FolderPlus } from 'lucide-react';
 import { apiUrl } from './utils/api';
 
 
 
 const AdminUpload = () => {
+  const navigate = useNavigate();
   const [uploadMethod, setUploadMethod] = useState('bulk');
   const [uploadMode, setUploadMode] = useState('new'); // 'new' or 'existing' - NEW
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, status: '' });
@@ -470,29 +472,27 @@ const AdminUpload = () => {
         }))
       };
 
+      console.log('Submitting manga data:', {
+        mangaId: mangaData.mangaId,
+        title: mangaData.title,
+        chaptersCount: mangaData.chapters?.length || 0,
+        volumesCount: mangaData.volumes?.length || 0,
+        hasVolumes: mangaData.hasVolumes
+      });
+
       const response = await axios.post(`${apiUrl}/api/admin/create-manga`, mangaData, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
+      console.log('Response from server:', response.data);
+      
       if (response.data.success) {
-        setMessage('✅ Manga created successfully!');
+        setMessage('✅ Manga created successfully! Redirecting to homepage...');
         
-        // Reset form
-        setFormData({
-          mangaId: '',
-          title: '',
-          description: '',
-          author: '',
-          artist: '',
-          genres: '',
-          status: 'ongoing',
-          hasVolumes: false,
-          volumes: []
-        });
-        setCoverUrl('');
-        setCoverPreview('');
-        setChapters([{ chapterNumber: 1, chapterNumberLabel: '1', title: '', pages: [] }]);
-        setExistingMangaId('');
+        // Wait a moment to show success message, then redirect
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
       } else {
         setMessage(`❌ Error: ${response.data.error || 'Failed to save manga'}`);
       }

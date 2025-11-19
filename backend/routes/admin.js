@@ -389,6 +389,21 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       volumes  // NEW: Optional volumes array
     } = req.body;
 
+    // Validate required fields FIRST
+    if (!mangaId || !title || !description || !author || !artist || !genres || genres.length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: {
+          mangaId: !mangaId ? 'Manga ID is required' : null,
+          title: !title ? 'Title is required' : null,
+          description: !description ? 'Description is required' : null,
+          author: !author ? 'Author is required' : null,
+          artist: !artist ? 'Artist is required' : null,
+          genres: !genres || genres.length === 0 ? 'At least one genre is required' : null
+        }
+      });
+    }
+
     // Auto-detect if we have volumes or flat chapters
     const hasVolumes = volumes && volumes.length > 0;
     
@@ -416,6 +431,21 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       allChapters = chapters || [];
     }
 
+    // Validate that we have at least some chapters or volumes
+    if (allChapters.length === 0) {
+      return res.status(400).json({ 
+        error: 'No chapters provided. Please upload at least one chapter before creating the manga.' 
+      });
+    }
+
+    console.log('Creating manga:', {
+      mangaId,
+      title,
+      totalChapters: allChapters.length,
+      hasVolumes,
+      volumesCount: volumesData.length
+    });
+
     const newManga = new Manga({
       _id: mangaId,
       title,
@@ -436,29 +466,8 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       updatedAt: new Date()
     });
 
-    // Validate required fields
-    if (!mangaId || !title || !description || !author || !artist || !genres || genres.length === 0) {
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        details: {
-          mangaId: !mangaId ? 'Manga ID is required' : null,
-          title: !title ? 'Title is required' : null,
-          description: !description ? 'Description is required' : null,
-          author: !author ? 'Author is required' : null,
-          artist: !artist ? 'Artist is required' : null,
-          genres: !genres || genres.length === 0 ? 'At least one genre is required' : null
-        }
-      });
-    }
-
-    // Validate that we have at least some chapters or volumes
-    if (allChapters.length === 0) {
-      return res.status(400).json({ 
-        error: 'No chapters provided. Please upload at least one chapter before creating the manga.' 
-      });
-    }
-
     await newManga.save();
+    console.log(`✅ Manga saved successfully: ${mangaId}`);
 
     console.log(`✅ Manga created: ${hasVolumes ? `${volumesData.length} volumes` : `${allChapters.length} chapters`}`);
 
