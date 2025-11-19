@@ -649,6 +649,15 @@ const HomePage = () => {
   const [loading, setLoading] = useState(true);
   const [readingHistory, setReadingHistory] = useState([]);
   const [mangaLoading, setMangaLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
   fetchManga();
@@ -953,9 +962,12 @@ const HomePage = () => {
         <h1 className="billboard-title">{featuredManga?.title || 'Featured'}</h1>
         <p className="billboard-description">
           {featuredManga?.description
-            ? (featuredManga.description.length > 220
-                ? featuredManga.description.slice(0, 220) + '…'
-                : featuredManga.description)
+            ? (() => {
+                const maxLength = isMobile ? 120 : 220;
+                return featuredManga.description.length > maxLength
+                  ? featuredManga.description.slice(0, maxLength) + '…'
+                  : featuredManga.description;
+              })()
             : 'Discover and read amazing manga stories.'}
         </p>
         <div className="billboard-metadata">
@@ -964,7 +976,9 @@ const HomePage = () => {
           <span>{featuredManga?.status || '—'}</span>
         </div>
 
-        {featuredManga && <DisplayRatingWithData mangaId={featuredManga._id} />}
+        <div className="billboard-rating-mobile">
+          {featuredManga && <DisplayRatingWithData mangaId={featuredManga._id} />}
+        </div>
         <div className="billboard-buttons">
           {featuredManga && (
             <>
