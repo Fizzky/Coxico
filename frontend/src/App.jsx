@@ -894,7 +894,7 @@ const HomePage = () => {
     <section className="billboard" style={{ position: 'relative', overflow: 'hidden', height: '60vh', backgroundColor: '#141414', opacity: isFading ? 0 : 1, transition: 'opacity 0.5s ease-in-out' }}>
       {/* Blurred Background Layer - Full Width */}
       {featuredManga?.coverImage && (
-        <div style={{
+        <div className="billboard-bg" style={{
           position: 'absolute',
           top: 0,
           left: 0,
@@ -925,9 +925,9 @@ const HomePage = () => {
         </div>
       )}
 
-      {/* Sharp Cover Image - Right Side */}
+      {/* Sharp Cover Image - Right Side (Hidden on mobile) */}
       {featuredManga?.coverImage && (
-        <div style={{
+        <div className="billboard-cover" style={{
           position: 'absolute',
           top: '55%',
           right: '5%',
