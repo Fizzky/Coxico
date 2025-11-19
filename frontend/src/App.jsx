@@ -1644,21 +1644,23 @@ const ChapterReaderPage = () => {
 
   // Scroll to saved page position on initial load only
   useEffect(() => {
-    if (data && scrollContainerRef.current && !hasScrolledToInitialPage.current) {
+    if (data && data.chapter && data.chapter.pages && scrollContainerRef.current && !hasScrolledToInitialPage.current) {
       // Wait for images to load before scrolling
-      setTimeout(() => {
-        if (pageRefs.current[currentPage]) {
-          pageRefs.current[currentPage].scrollIntoView({ behavior: 'auto', block: 'start' });
+      const timer = setTimeout(() => {
+        const pageIndex = currentPage >= 0 && currentPage < data.chapter.pages.length ? currentPage : 0;
+        if (pageRefs.current[pageIndex]) {
+          pageRefs.current[pageIndex].scrollIntoView({ behavior: 'auto', block: 'start' });
           hasScrolledToInitialPage.current = true;
         }
-      }, 100);
+      }, 300);
+      return () => clearTimeout(timer);
     }
-  }, [data]);
+  }, [data, currentPage]);
 
   // Track scroll position to update currentPage
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container || !data) return;
+    if (!container || !data || !data.chapter || !data.chapter.pages) return;
 
     const handleScroll = () => {
       const containerTop = container.scrollTop;
@@ -1679,9 +1681,12 @@ const ChapterReaderPage = () => {
           
           // Check if page is in viewport
           if (scrollPosition >= pageTop && scrollPosition < pageBottom) {
-            if (currentPage !== i) {
-              setCurrentPage(i);
-            }
+            setCurrentPage((prevPage) => {
+              if (prevPage !== i) {
+                return i;
+              }
+              return prevPage;
+            });
             return;
           }
           
@@ -1695,14 +1700,19 @@ const ChapterReaderPage = () => {
       }
       
       // Update to closest page if scrolling fast
-      if (closestDistance < containerHeight && currentPage !== closestPage) {
-        setCurrentPage(closestPage);
+      if (closestDistance < containerHeight) {
+        setCurrentPage((prevPage) => {
+          if (prevPage !== closestPage) {
+            return closestPage;
+          }
+          return prevPage;
+        });
       }
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [data, currentPage]);
+  }, [data]);
 
   return (
     <div className="min-h-screen bg-black text-white" style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
