@@ -466,30 +466,47 @@ const AdminUpload = () => {
         }))
       };
 
-      await axios.post('/api/admin/create-manga', mangaData, {
+      const response = await axios.post('/api/admin/create-manga', mangaData, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      setMessage('✅ Manga created successfully!');
+      
+      if (response.data.success) {
+        setMessage('✅ Manga created successfully!');
+        
+        // Reset form
+        setFormData({
+          mangaId: '',
+          title: '',
+          description: '',
+          author: '',
+          artist: '',
+          genres: '',
+          status: 'ongoing',
+          hasVolumes: false,
+          volumes: []
+        });
+        setCoverUrl('');
+        setCoverPreview('');
+        setChapters([{ chapterNumber: 1, chapterNumberLabel: '1', title: '', pages: [] }]);
+        setExistingMangaId('');
+      } else {
+        setMessage(`❌ Error: ${response.data.error || 'Failed to save manga'}`);
+      }
     }
-    
-    // Reset form
-    setFormData({
-      mangaId: '',
-      title: '',
-      description: '',
-      author: '',
-      artist: '',
-      genres: '',
-      status: 'ongoing',
-      hasVolumes: false,
-      volumes: []
-    });
-    setCoverUrl('');
-    setCoverPreview('');
-    setChapters([{ chapterNumber: 1, chapterNumberLabel: '1', title: '', pages: [] }]);
-    setExistingMangaId('');
   } catch (error) {
-    setMessage(`❌ Error: ${error.response?.data?.error || 'Failed to save manga'}`);
+    console.error('Submit error:', error);
+    const errorMessage = error.response?.data?.error 
+      || error.response?.data?.message 
+      || error.message 
+      || 'Failed to save manga';
+    
+    // Show more detailed error if available
+    if (error.response?.data?.errors) {
+      const validationErrors = error.response.data.errors.map(e => e.msg || e.message).join(', ');
+      setMessage(`❌ Error: ${validationErrors}`);
+    } else {
+      setMessage(`❌ Error: ${errorMessage}`);
+    }
   } finally {
     setUploading(false);
   }

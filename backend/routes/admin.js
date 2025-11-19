@@ -436,6 +436,28 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       updatedAt: new Date()
     });
 
+    // Validate required fields
+    if (!mangaId || !title || !description || !author || !artist || !genres || genres.length === 0) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        details: {
+          mangaId: !mangaId ? 'Manga ID is required' : null,
+          title: !title ? 'Title is required' : null,
+          description: !description ? 'Description is required' : null,
+          author: !author ? 'Author is required' : null,
+          artist: !artist ? 'Artist is required' : null,
+          genres: !genres || genres.length === 0 ? 'At least one genre is required' : null
+        }
+      });
+    }
+
+    // Validate that we have at least some chapters or volumes
+    if (allChapters.length === 0) {
+      return res.status(400).json({ 
+        error: 'No chapters provided. Please upload at least one chapter before creating the manga.' 
+      });
+    }
+
     await newManga.save();
 
     console.log(`✅ Manga created: ${hasVolumes ? `${volumesData.length} volumes` : `${allChapters.length} chapters`}`);
@@ -446,7 +468,27 @@ router.post('/create-manga', adminAuth, async (req, res) => {
     });
   } catch (error) {
     console.error('Create manga error:', error);
-    res.status(500).json({ error: 'Failed to create manga' });
+    
+    // Handle duplicate key error (mangaId already exists)
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        error: `Manga with ID "${error.keyValue?.mangaId || error.keyValue?._id || 'this ID'}" already exists. Please use a different manga ID.` 
+      });
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(e => e.message).join(', ');
+      return res.status(400).json({ 
+        error: `Validation error: ${validationErrors}` 
+      });
+    }
+    
+    // Return detailed error message
+    res.status(500).json({ 
+      error: error.message || 'Failed to create manga',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
