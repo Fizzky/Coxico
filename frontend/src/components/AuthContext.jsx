@@ -1,9 +1,13 @@
 // frontend/src/components/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { apiUrl } from '../utils/api';
 
 const AuthContext = createContext();
+
+// Session timeout configuration (24 hours in milliseconds)
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_WARNING_TIME = 5 * 60 * 1000; // Show warning 5 minutes before timeout
 
 // Fixed export pattern for Vite Fast Refresh compatibility
 function useAuth() {
@@ -26,6 +30,12 @@ function AuthProvider({ children }) {
   
   // Auto-mapping cache for slug to ObjectId
   const [slugToIdCache, setSlugToIdCache] = useState({});
+
+  // Session timeout state
+  const [showSessionWarning, setShowSessionWarning] = useState(false);
+  const sessionTimeoutRef = useRef(null);
+  const sessionWarningRef = useRef(null);
+  const activityTimeoutRef = useRef(null);
 
   // Set axios default header
   useEffect(() => {
@@ -199,15 +209,139 @@ function AuthProvider({ children }) {
     }
   }, [token]);
 
+  // Update session timestamp on user activity
+  const updateSessionTimestamp = useCallback(() => {
+    if (token && user) {
+      localStorage.setItem('sessionTimestamp', Date.now().toString());
+      setShowSessionWarning(false);
+      // Clear existing timeouts
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+      }
+      if (sessionWarningRef.current) {
+        clearTimeout(sessionWarningRef.current);
+      }
+      // Set new timeouts
+      setupSessionTimeouts();
+    }
+  }, [token, user]);
+
+  // Setup session timeout and warning
+  const setupSessionTimeouts = useCallback(() => {
+    if (!token || !user) return;
+
+    const sessionTimestamp = localStorage.getItem('sessionTimestamp');
+    if (!sessionTimestamp) {
+      localStorage.setItem('sessionTimestamp', Date.now().toString());
+      return;
+    }
+
+    const elapsed = Date.now() - parseInt(sessionTimestamp, 10);
+    const remaining = SESSION_TIMEOUT - elapsed;
+    const warningTime = remaining - SESSION_WARNING_TIME;
+
+    // Clear existing timeouts
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+    if (sessionWarningRef.current) {
+      clearTimeout(sessionWarningRef.current);
+    }
+
+    // Set warning timeout
+    if (warningTime > 0) {
+      sessionWarningRef.current = setTimeout(() => {
+        setShowSessionWarning(true);
+      }, warningTime);
+    } else if (remaining > 0) {
+      // If we're already past warning time but not expired, show warning immediately
+      setShowSessionWarning(true);
+    }
+
+    // Set logout timeout
+    if (remaining > 0) {
+      sessionTimeoutRef.current = setTimeout(() => {
+        logout();
+        setShowSessionWarning(false);
+        alert('Your session has expired. Please login again.');
+      }, remaining);
+    } else {
+      // Session already expired
+      logout();
+      alert('Your session has expired. Please login again.');
+    }
+  }, [token, user]);
+
+  // Check session on mount and when token/user changes
+  useEffect(() => {
+    if (token && user) {
+      setupSessionTimeouts();
+    } else {
+      // Clear timeouts if not authenticated
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+      }
+      if (sessionWarningRef.current) {
+        clearTimeout(sessionWarningRef.current);
+      }
+      setShowSessionWarning(false);
+    }
+  }, [token, user, setupSessionTimeouts]);
+
+  // Track user activity to reset session timeout
+  useEffect(() => {
+    if (!token || !user) return;
+
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    let activityTimeout;
+
+    const handleActivity = () => {
+      // Debounce activity updates (update max once per minute)
+      clearTimeout(activityTimeout);
+      activityTimeout = setTimeout(() => {
+        updateSessionTimestamp();
+      }, 60000); // Update at most once per minute
+    };
+
+    activityEvents.forEach(event => {
+      window.addEventListener(event, handleActivity, { passive: true });
+    });
+
+    return () => {
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+      clearTimeout(activityTimeout);
+    };
+  }, [token, user, updateSessionTimestamp]);
+
   // Check if user is logged in on app load
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
+    const storedTimestamp = localStorage.getItem('sessionTimestamp');
     
     if (storedToken && storedUser) {
       try {
+        // Check if session is still valid
+        if (storedTimestamp) {
+          const elapsed = Date.now() - parseInt(storedTimestamp, 10);
+          if (elapsed > SESSION_TIMEOUT) {
+            // Session expired, clear everything
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('sessionTimestamp');
+            setLoading(false);
+            return;
+          }
+        }
+        
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
+        // Update timestamp if it doesn't exist
+        if (!storedTimestamp) {
+          localStorage.setItem('sessionTimestamp', Date.now().toString());
+        }
       } catch (error) {
         console.error('Error parsing stored user:', error);
         logout();
@@ -240,6 +374,7 @@ function AuthProvider({ children }) {
       
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('sessionTimestamp', Date.now().toString());
       
       setToken(token);
       setUser(user);
@@ -265,6 +400,7 @@ function AuthProvider({ children }) {
       
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
+      localStorage.setItem('sessionTimestamp', Date.now().toString());
       
       setToken(token);
       setUser(user);
@@ -281,12 +417,22 @@ function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('sessionTimestamp');
+    
+    // Clear session timeouts
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+    if (sessionWarningRef.current) {
+      clearTimeout(sessionWarningRef.current);
+    }
     
     setToken(null);
     setUser(null);
     setFavorites([]);
     setContinueReading([]);
     setReadingStats(null);
+    setShowSessionWarning(false);
     
     delete axios.defaults.headers.common['Authorization'];
   };
@@ -319,7 +465,10 @@ function AuthProvider({ children }) {
     updateReadingProgress,
     fetchContinueReading,
     fetchReadingHistory,
-    fetchReadingStats
+    fetchReadingStats,
+    // Session timeout
+    showSessionWarning,
+    updateSessionTimestamp
   };
 
   return (

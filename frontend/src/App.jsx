@@ -4078,10 +4078,102 @@ const ResetPasswordPage = () => {
   );
 };
 
+// ---------------------- Session Warning Modal ----------------------
+const SessionWarningModal = () => {
+  const { showSessionWarning, updateSessionTimestamp, logout } = useAuth();
+  const [countdown, setCountdown] = useState(5 * 60); // 5 minutes in seconds
+
+  useEffect(() => {
+    if (!showSessionWarning) return;
+
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          logout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showSessionWarning, logout]);
+
+  if (!showSessionWarning) return null;
+
+  const minutes = Math.floor(countdown / 60);
+  const seconds = countdown % 60;
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      zIndex: 10000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }}>
+      <div style={{
+        backgroundColor: '#141414',
+        padding: '32px',
+        borderRadius: '8px',
+        maxWidth: '500px',
+        width: '90%',
+        border: '1px solid #333'
+      }}>
+        <h2 style={{ color: '#fff', marginBottom: '16px', fontSize: '24px' }}>
+          Session Expiring Soon
+        </h2>
+        <p style={{ color: '#ccc', marginBottom: '24px', lineHeight: '1.6' }}>
+          Your session will expire in <strong style={{ color: '#e50914' }}>{minutes}:{seconds.toString().padStart(2, '0')}</strong> due to inactivity.
+          Click "Stay Logged In" to continue your session.
+        </p>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+          <button
+            onClick={logout}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: 'transparent',
+              color: '#fff',
+              border: '1px solid #666',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Logout Now
+          </button>
+          <button
+            onClick={updateSessionTimestamp}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#e50914',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600'
+            }}
+          >
+            Stay Logged In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ---------------------- App ----------------------
 function App() {
   return (
     <AuthProvider>
+      <SessionWarningModal />
       <Router>
         <div className="App">
           <Header />
