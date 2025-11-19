@@ -2,10 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Fixed viewport - prevents zoom scaling */
+/* Responsive viewport */
 html {
-  min-width: 1280px;
   overflow-x: auto;
+}
+
+/* Apply min-width only on desktop screens */
+@media (min-width: 1280px) {
+  html {
+    min-width: 1280px;
+  }
 }
 
 body {
@@ -15,8 +21,13 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  min-width: 1280px;
-  zoom: 1.0;
+}
+
+/* Apply min-width only on desktop screens */
+@media (min-width: 1280px) {
+  body {
+    min-width: 1280px;
+  }
 }
 
 /* Prevent all zoom scaling */
