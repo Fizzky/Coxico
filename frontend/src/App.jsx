@@ -934,7 +934,7 @@ const HomePage = () => {
         </div>
       )}
 
-      {/* Sharp Cover Image - Right Side (Hidden on mobile) */}
+      {/* Sharp Cover Image - Right Side */}
       {featuredManga?.coverImage && (
         <div className="billboard-cover" style={{
           position: 'absolute',
