@@ -9,13 +9,15 @@ body {
 }
 
 /* Ensure manga reader page has black background */
-body:has(.manga-page-image) {
+body:has(.manga-page-image),
+html:has(.manga-page-image) {
   background: #000 !important;
 }
 
 /* Manga reader container - ensure black background */
 .manga-reader-container {
   background-color: #000 !important;
+  background: #000 !important;
 }
 
 /* When the search overlay is open, lock page scroll */

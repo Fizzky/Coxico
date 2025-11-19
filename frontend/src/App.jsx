@@ -1723,7 +1723,7 @@ const ChapterReaderPage = () => {
   const isLastChapter = !data.allChapters || currentChapterIndex === data.allChapters.length - 1;
 
   return (
-    <div className="min-h-screen bg-black text-white" style={{ position: 'relative', height: '100vh', overflow: 'hidden', backgroundColor: '#000' }}>
+    <div className="min-h-screen bg-black text-white" style={{ position: 'relative', height: '100vh', overflow: 'hidden', backgroundColor: '#000', width: '100%' }}>
       {/* Chapter Navigation Header */}
       <div 
         className="bg-gray-900 p-4" 
@@ -1769,7 +1769,8 @@ const ChapterReaderPage = () => {
           flexDirection: 'column',
           alignItems: 'center',
           gap: '0',
-          backgroundColor: '#000',
+          backgroundColor: '#000000',
+          background: '#000000',
           WebkitOverflowScrolling: 'touch'
         }}
       >
