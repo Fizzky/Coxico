@@ -8,13 +8,6 @@ import hpp from 'hpp';
 import rateLimit from 'express-rate-limit';
 import timeout from 'connect-timeout';
 
-process.on('uncaughtException', (error, origin) => {
-  console.error('\n💥 CRASH DETECTED 💥');
-  console.error('Error:', error.message);
-  console.error('Stack:', error.stack);
-  setTimeout(() => process.exit(1), 2000);
-});
-
 // Resolve __dirname in ESM first
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,9 +67,13 @@ app.use(mongoSanitize())
 app.use(xss())
 app.use(hpp())
 
+// Body parsing middleware (must come before CORS)
 app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-app.use(cors());
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: "50mb",
+  parameterLimit: 50000
+}));
 
 app.use(timeout('600s')); 
 app.use((req, res, next) => {
@@ -140,13 +137,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// ---------- Middleware ----------
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ 
-  extended: true, 
-  limit: "50mb",
-  parameterLimit: 50000  // ADD THIS
-}));
+// Body parsing already configured above
 
 // ---------- Static files ----------
 // If you chose uploads/ as your static root:
@@ -269,6 +260,8 @@ process.on('uncaughtException', (error) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 Unhandled Rejection at:', promise);
   console.error('Reason:', reason);
+  // Don't exit on unhandled rejection, but log it
+  // This prevents crashes from async errors
 });
 
 // Graceful shutdown
