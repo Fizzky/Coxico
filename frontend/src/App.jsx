@@ -1517,21 +1517,29 @@ const ChapterReaderPage = () => {
     };
   }, [data, currentPage, isAuthenticated, mangaId, updateReadingProgress, startTime, lastProgressUpdate]);
 
-  // Keyboard navigation
+  // Keyboard navigation - scroll to next/prev page
   useEffect(() => {
     const handleKeyPress = (e) => {
-      if (e.key === 'ArrowLeft') {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        prevPage();
-      } else if (e.key === 'ArrowRight') {
+        if (currentPage > 0 && pageRefs.current[currentPage - 1]) {
+          pageRefs.current[currentPage - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (!isFirstChapter) {
+          prevChapterToLastPage();
+        }
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        nextPage();
+        if (currentPage < data.chapter.pages.length - 1 && pageRefs.current[currentPage + 1]) {
+          pageRefs.current[currentPage + 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (!isLastChapter) {
+          nextChapter();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentPage, data]);
+  }, [currentPage, data, isFirstChapter, isLastChapter]);
 
   const nextPage = () => {
     if (data && currentPage < data.chapter.pages.length - 1) {
@@ -1629,8 +1637,75 @@ const ChapterReaderPage = () => {
   const isFirstChapter = !data.allChapters || currentChapterIndex <= 0;
   const isLastChapter = !data.allChapters || currentChapterIndex === data.allChapters.length - 1;
 
+  // Scroll tracking for vertical reading mode
+  const scrollContainerRef = useRef(null);
+  const pageRefs = useRef([]);
+  const hasScrolledToInitialPage = useRef(false);
+
+  // Scroll to saved page position on initial load only
+  useEffect(() => {
+    if (data && scrollContainerRef.current && !hasScrolledToInitialPage.current) {
+      // Wait for images to load before scrolling
+      setTimeout(() => {
+        if (pageRefs.current[currentPage]) {
+          pageRefs.current[currentPage].scrollIntoView({ behavior: 'auto', block: 'start' });
+          hasScrolledToInitialPage.current = true;
+        }
+      }, 100);
+    }
+  }, [data]);
+
+  // Track scroll position to update currentPage
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || !data) return;
+
+    const handleScroll = () => {
+      const containerTop = container.scrollTop;
+      const containerHeight = container.clientHeight;
+      const scrollPosition = containerTop + containerHeight / 3; // Use top third of viewport
+
+      // Find which page is currently in view
+      let closestPage = 0;
+      let closestDistance = Infinity;
+
+      for (let i = 0; i < pageRefs.current.length; i++) {
+        const pageElement = pageRefs.current[i];
+        if (pageElement) {
+          const rect = pageElement.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          const pageTop = rect.top - containerRect.top + container.scrollTop;
+          const pageBottom = pageTop + rect.height;
+          
+          // Check if page is in viewport
+          if (scrollPosition >= pageTop && scrollPosition < pageBottom) {
+            if (currentPage !== i) {
+              setCurrentPage(i);
+            }
+            return;
+          }
+          
+          // Track closest page for when scrolling fast
+          const distance = Math.abs(pageTop - scrollPosition);
+          if (distance < closestDistance) {
+            closestDistance = distance;
+            closestPage = i;
+          }
+        }
+      }
+      
+      // Update to closest page if scrolling fast
+      if (closestDistance < containerHeight && currentPage !== closestPage) {
+        setCurrentPage(closestPage);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [data, currentPage]);
+
   return (
-    <div className="min-h-screen bg-black text-white overflow-hidden">
+    <div className="min-h-screen bg-black text-white">
       {/* Chapter Navigation Header */}
       <div 
         className="bg-gray-900 p-4" 
@@ -1659,34 +1734,50 @@ const ChapterReaderPage = () => {
         </div>
       </div>
 
-      {/* Reader Content */}
+      {/* Vertical Scrollable Reader Content */}
       <div 
+        ref={scrollContainerRef}
         style={{
-          position: 'fixed',
-          top: '120px',
-          left: '0',
-          right: '0',
-          bottom: '80px',
+          marginTop: '120px',
+          marginBottom: '80px',
+          padding: '20px 10px',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          minHeight: 'calc(100vh - 200px)',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
-          padding: '10px'
+          gap: '10px'
         }}
       >
-        <img
-          src={data.chapter.pages[currentPage]}
-          alt={`Page ${currentPage + 1}`}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            width: 'auto',
-            height: 'auto',
-            objectFit: 'contain'
-          }}
-        />
+        {data.chapter.pages.map((pageUrl, index) => (
+          <div
+            key={index}
+            ref={(el) => (pageRefs.current[index] = el)}
+            style={{
+              width: '100%',
+              maxWidth: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '0'
+            }}
+          >
+            <img
+              src={pageUrl}
+              alt={`Page ${index + 1}`}
+              style={{
+                width: '100%',
+                maxWidth: '100%',
+                height: 'auto',
+                objectFit: 'contain',
+                display: 'block'
+              }}
+            />
+          </div>
+        ))}
       </div>
 
-      {/* Navigation Controls */}
+      {/* Bottom Navigation Controls */}
       <div 
         className="bg-gray-900 rounded-lg p-2 flex items-center space-x-4"
         style={{
@@ -1698,7 +1789,13 @@ const ChapterReaderPage = () => {
         }}
       >
         <button
-          onClick={prevPage}
+          onClick={() => {
+            if (currentPage > 0) {
+              pageRefs.current[currentPage - 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (!isFirstChapter) {
+              prevChapterToLastPage();
+            }
+          }}
           disabled={currentPage === 0 && isFirstChapter}
           className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 rounded"
         >
@@ -1710,77 +1807,19 @@ const ChapterReaderPage = () => {
         </span>
 
         <button
-          onClick={nextPage}
+          onClick={() => {
+            if (currentPage < data.chapter.pages.length - 1) {
+              pageRefs.current[currentPage + 1]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (!isLastChapter) {
+              nextChapter();
+            }
+          }}
           disabled={currentPage >= data.chapter.pages.length - 1 && isLastChapter}
           className="p-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 rounded"
         >
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
-
-      {/* Page Navigation - Left */}
-<div 
-  style={{
-    position: 'fixed',
-    top: '50%',
-    left: '20px',
-    transform: 'translateY(-50%)',
-    zIndex: '100'
-  }}
->
-  <button
-    onClick={prevPage}
-    className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
-    disabled={currentPage === 0 && isFirstChapter}
-  >
-    <ArrowLeft className="h-6 w-6" />
-  </button>
-</div>
-
-{/* Page Navigation - Right */}
-<div 
-  style={{
-    position: 'fixed',
-    top: '50%',
-    right: '20px',
-    transform: 'translateY(-50%)',
-    zIndex: '100'
-  }}
->
-  <button
-    onClick={nextPage}
-    className="bg-gray-900 p-3 rounded-full hover:bg-gray-700 disabled:opacity-50"
-    disabled={currentPage >= data.chapter.pages.length - 1 && isLastChapter}
-  >
-    <ArrowRight className="h-6 w-6" />
-  </button>
-</div>
-
-      {/* Click areas for page navigation */}
-      <div
-        className="cursor-pointer"
-        style={{
-          position: 'fixed',
-          top: '120px',
-          left: '0',
-          width: '33%',
-          bottom: '80px',
-          zIndex: '50'
-        }}
-        onClick={prevPage}
-      />
-      <div
-        style={{
-          position: 'fixed',
-          top: '120px',
-          right: '0',
-          width: '33%',
-          bottom: '80px',
-          zIndex: '50',
-          cursor: 'pointer'
-        }}
-        onClick={nextPage}
-      />
     </div>
   );
 };
