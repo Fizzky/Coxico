@@ -1519,19 +1519,25 @@ const ChapterReaderPage = () => {
 
   // Keyboard navigation - scroll to next/prev page
   useEffect(() => {
+    if (!data || !data.chapter) return;
+    
     const handleKeyPress = (e) => {
+      const currentIndex = data.allChapters ? findChapterIndex(data.allChapters, chapterNumber) : -1;
+      const isFirst = !data.allChapters || currentIndex <= 0;
+      const isLast = !data.allChapters || currentIndex === data.allChapters.length - 1;
+      
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
         if (currentPage > 0 && pageRefs.current[currentPage - 1]) {
           pageRefs.current[currentPage - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else if (!isFirstChapter) {
+        } else if (!isFirst) {
           prevChapterToLastPage();
         }
       } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
         if (currentPage < data.chapter.pages.length - 1 && pageRefs.current[currentPage + 1]) {
           pageRefs.current[currentPage + 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else if (!isLastChapter) {
+        } else if (!isLast) {
           nextChapter();
         }
       }
@@ -1539,7 +1545,7 @@ const ChapterReaderPage = () => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentPage, data, isFirstChapter, isLastChapter]);
+  }, [currentPage, data, chapterNumber, mangaId, navigate]);
 
   const nextPage = () => {
     if (data && currentPage < data.chapter.pages.length - 1) {
@@ -1605,44 +1611,12 @@ const ChapterReaderPage = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-          <p className="mt-2">Loading chapter...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-center">
-          <h2 className="text-2xl font-bold mb-4">Chapter not found</h2>
-          <button
-            onClick={() => navigate(`/manga/${mangaId}`)}
-            className="text-blue-400 hover:text-blue-300"
-          >
-            Go back to manga
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const currentChapterLabel = getChapterLabel(data.chapter);
-  const currentChapterIndex = data.allChapters ? findChapterIndex(data.allChapters, chapterNumber) : -1;
-  const isFirstChapter = !data.allChapters || currentChapterIndex <= 0;
-  const isLastChapter = !data.allChapters || currentChapterIndex === data.allChapters.length - 1;
-
-  // Scroll tracking for vertical reading mode
+  // Scroll tracking for vertical reading mode - MUST be before early returns
   const scrollContainerRef = useRef(null);
   const pageRefs = useRef([]);
   const hasScrolledToInitialPage = useRef(false);
 
-  // Scroll to saved page position on initial load only
+  // Scroll to saved page position on initial load only - MUST be before early returns
   useEffect(() => {
     if (data && data.chapter && data.chapter.pages && scrollContainerRef.current && !hasScrolledToInitialPage.current) {
       // Wait for images to load before scrolling
@@ -1713,6 +1687,40 @@ const ChapterReaderPage = () => {
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [data]);
+
+  // Early returns - AFTER all hooks
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          <p className="mt-2">Loading chapter...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white text-center">
+          <h2 className="text-2xl font-bold mb-4">Chapter not found</h2>
+          <button
+            onClick={() => navigate(`/manga/${mangaId}`)}
+            className="text-blue-400 hover:text-blue-300"
+          >
+            Go back to manga
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Compute values after data is confirmed to exist
+  const currentChapterLabel = getChapterLabel(data.chapter);
+  const currentChapterIndex = data.allChapters ? findChapterIndex(data.allChapters, chapterNumber) : -1;
+  const isFirstChapter = !data.allChapters || currentChapterIndex <= 0;
+  const isLastChapter = !data.allChapters || currentChapterIndex === data.allChapters.length - 1;
 
   return (
     <div className="min-h-screen bg-black text-white" style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
