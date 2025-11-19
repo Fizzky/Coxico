@@ -8,6 +8,16 @@ body {
   overflow-x: hidden;
 }
 
+/* Ensure manga reader page has black background */
+body:has(.manga-page-image) {
+  background: #000 !important;
+}
+
+/* Manga reader container - ensure black background */
+.manga-reader-container {
+  background-color: #000 !important;
+}
+
 /* When the search overlay is open, lock page scroll */
 body.search-open { overflow: hidden; }
 

@@ -1723,7 +1723,7 @@ const ChapterReaderPage = () => {
   const isLastChapter = !data.allChapters || currentChapterIndex === data.allChapters.length - 1;
 
   return (
-    <div className="min-h-screen bg-black text-white" style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
+    <div className="min-h-screen bg-black text-white" style={{ position: 'relative', height: '100vh', overflow: 'hidden', backgroundColor: '#000' }}>
       {/* Chapter Navigation Header */}
       <div 
         className="bg-gray-900 p-4" 
@@ -1755,6 +1755,7 @@ const ChapterReaderPage = () => {
       {/* Vertical Scrollable Reader Content */}
       <div 
         ref={scrollContainerRef}
+        className="manga-reader-container"
         style={{
           position: 'absolute',
           top: '120px',
