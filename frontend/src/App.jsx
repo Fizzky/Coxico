@@ -1786,18 +1786,22 @@ const ChapterReaderPage = () => {
                 maxWidth: '100%',
                 display: 'flex',
                 justifyContent: 'center',
-                marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '0'
+                alignItems: 'center',
+                marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '0',
+                padding: '0 10px'
               }}
             >
               <img
                 src={pageUrl}
                 alt={`Page ${index + 1}`}
+                className="manga-page-image"
                 style={{
                   width: '100%',
-                  maxWidth: '100%',
+                  maxWidth: '700px',
                   height: 'auto',
                   objectFit: 'contain',
-                  display: 'block'
+                  display: 'block',
+                  margin: '0 auto'
                 }}
                 onError={(e) => {
                   console.error(`Failed to load page ${index + 1}:`, pageUrl);
