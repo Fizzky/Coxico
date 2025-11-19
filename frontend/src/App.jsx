@@ -1768,7 +1768,7 @@ const ChapterReaderPage = () => {
           flexDirection: 'column',
           alignItems: 'center',
           gap: '0',
-          backgroundColor: '#f5f5f5',
+          backgroundColor: '#000',
           WebkitOverflowScrolling: 'touch'
         }}
       >
