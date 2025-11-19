@@ -40,6 +40,10 @@ import feedbackRoutes from './routes/feedback.js';
 
 const app = express();
 
+// Trust proxy - REQUIRED for Railway/Vercel and express-rate-limit to work correctly
+// This tells Express to trust the X-Forwarded-* headers from the reverse proxy
+app.set('trust proxy', true);
+
 // HTTPS enforcement in production
 if (process.env.NODE_ENV === 'production') {
   app.use((req, res, next) => {
