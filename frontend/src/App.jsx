@@ -1705,7 +1705,7 @@ const ChapterReaderPage = () => {
   }, [data, currentPage]);
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white" style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
       {/* Chapter Navigation Header */}
       <div 
         className="bg-gray-900 p-4" 
@@ -1738,43 +1738,64 @@ const ChapterReaderPage = () => {
       <div 
         ref={scrollContainerRef}
         style={{
-          marginTop: '120px',
-          marginBottom: '80px',
+          position: 'absolute',
+          top: '120px',
+          left: '0',
+          right: '0',
+          bottom: '80px',
           padding: '20px 10px',
           overflowY: 'auto',
           overflowX: 'hidden',
-          minHeight: 'calc(100vh - 200px)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '10px'
+          gap: '10px',
+          backgroundColor: '#000',
+          WebkitOverflowScrolling: 'touch'
         }}
       >
-        {data.chapter.pages.map((pageUrl, index) => (
-          <div
-            key={index}
-            ref={(el) => (pageRefs.current[index] = el)}
-            style={{
-              width: '100%',
-              maxWidth: '100%',
-              display: 'flex',
-              justifyContent: 'center',
-              marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '0'
-            }}
-          >
-            <img
-              src={pageUrl}
-              alt={`Page ${index + 1}`}
+        {data.chapter.pages && data.chapter.pages.length > 0 ? (
+          data.chapter.pages.map((pageUrl, index) => (
+            <div
+              key={index}
+              ref={(el) => {
+                if (el) {
+                  pageRefs.current[index] = el;
+                }
+              }}
               style={{
                 width: '100%',
                 maxWidth: '100%',
-                height: 'auto',
-                objectFit: 'contain',
-                display: 'block'
+                display: 'flex',
+                justifyContent: 'center',
+                marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '0'
               }}
-            />
+            >
+              <img
+                src={pageUrl}
+                alt={`Page ${index + 1}`}
+                style={{
+                  width: '100%',
+                  maxWidth: '100%',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  display: 'block'
+                }}
+                onError={(e) => {
+                  console.error(`Failed to load page ${index + 1}:`, pageUrl);
+                  e.target.style.display = 'none';
+                }}
+                onLoad={() => {
+                  console.log(`Page ${index + 1} loaded successfully`);
+                }}
+              />
+            </div>
+          ))
+        ) : (
+          <div className="text-white text-center p-8">
+            <p>No pages available</p>
           </div>
-        ))}
+        )}
       </div>
 
       {/* Bottom Navigation Controls */}
