@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Upload, X, Plus, Check, AlertCircle, FolderUp, Package, FolderPlus } from 'lucide-react';
+import { apiUrl } from './utils/api';
 
 
 
@@ -36,12 +37,15 @@ const AdminUpload = () => {
     const fetchManga = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('/api/admin/manga', {
+        const response = await axios.get(`${apiUrl}/api/admin/manga`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         setAllManga(response.data.manga);
       } catch (error) {
         console.error('Error fetching manga:', error);
+        if (error.code === 'ERR_NETWORK' || !error.response) {
+          console.error('Network error - backend may not be accessible at:', apiUrl);
+        }
       }
     };
     fetchManga();
@@ -68,7 +72,7 @@ const AdminUpload = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post('/api/admin/upload-cover', data, {
+      const response = await axios.post(`${apiUrl}/api/admin/upload-cover`, data, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -107,7 +111,7 @@ const AdminUpload = () => {
         coverData.append('cover', coverFile);
         coverData.append('mangaId', formData.mangaId);
         
-        const coverResponse = await axios.post('/api/admin/upload-cover', coverData, {
+        const coverResponse = await axios.post(`${apiUrl}/api/admin/upload-cover`, coverData, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         setCoverUrl(coverResponse.data.url);
@@ -241,7 +245,7 @@ const AdminUpload = () => {
           }
 
           try {
-            const pagesResponse = await axios.post('/api/admin/upload-pages', pagesData, {
+            const pagesResponse = await axios.post(`${apiUrl}/api/admin/upload-pages`, pagesData, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
             
@@ -432,7 +436,7 @@ const AdminUpload = () => {
         };
 
       const response = await axios.post(
-        `/api/admin/manga/${existingMangaId}/add-volumes`,
+        `${apiUrl}/api/admin/manga/${existingMangaId}/add-volumes`,
         volumesData,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
@@ -466,7 +470,7 @@ const AdminUpload = () => {
         }))
       };
 
-      const response = await axios.post('/api/admin/create-manga', mangaData, {
+      const response = await axios.post(`${apiUrl}/api/admin/create-manga`, mangaData, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -495,6 +499,23 @@ const AdminUpload = () => {
     }
   } catch (error) {
     console.error('Submit error:', error);
+    
+    // Handle network errors specifically
+    if (error.code === 'ERR_NETWORK' || error.message === 'Network Error' || !error.response) {
+      setMessage(`❌ Network Error: Unable to connect to the server. Please check:
+      • Backend server is running
+      • API URL is configured correctly
+      • Network connection is stable
+      • CORS settings allow requests from this domain`);
+      return;
+    }
+    
+    // Handle timeout errors
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      setMessage(`❌ Request Timeout: The server took too long to respond. The upload might be too large. Please try again or upload in smaller batches.`);
+      return;
+    }
+    
     const errorMessage = error.response?.data?.error 
       || error.response?.data?.message 
       || error.message 
