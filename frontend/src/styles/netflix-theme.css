@@ -618,31 +618,40 @@ body.search-open { overflow: hidden; }
 }
 .didyou-link:hover { text-decoration: underline; }
 
-/* Manga Reader Page Sizing */
+/* Manga Reader Page Sizing - Compact like mangakatana */
 .manga-page-image {
-  max-width: 700px;
-  width: 100%;
+  max-width: 600px;
+  width: auto;
   height: auto;
+  display: block;
+  margin: 0 auto;
 }
 
 /* Responsive sizing for manga pages */
 @media (max-width: 1024px) {
   .manga-page-image {
-    max-width: 90%;
+    max-width: 85%;
   }
 }
 
 @media (max-width: 768px) {
   .manga-page-image {
-    max-width: 95%;
+    max-width: 90%;
     padding: 0 8px;
   }
 }
 
 @media (max-width: 480px) {
   .manga-page-image {
-    max-width: 100%;
+    max-width: 95%;
     padding: 0 4px;
+  }
+}
+
+@media (max-width: 360px) {
+  .manga-page-image {
+    max-width: 100%;
+    padding: 0 2px;
   }
 }
 

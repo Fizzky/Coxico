@@ -1761,14 +1761,14 @@ const ChapterReaderPage = () => {
           left: '0',
           right: '0',
           bottom: '80px',
-          padding: '20px 10px',
+          padding: '20px 0',
           overflowY: 'auto',
           overflowX: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '10px',
-          backgroundColor: '#000',
+          gap: '0',
+          backgroundColor: '#fff',
           WebkitOverflowScrolling: 'touch'
         }}
       >
@@ -1786,9 +1786,9 @@ const ChapterReaderPage = () => {
                 maxWidth: '100%',
                 display: 'flex',
                 justifyContent: 'center',
-                alignItems: 'center',
-                marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '0',
-                padding: '0 10px'
+                alignItems: 'flex-start',
+                marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '8px',
+                padding: '0'
               }}
             >
               <img
@@ -1796,8 +1796,8 @@ const ChapterReaderPage = () => {
                 alt={`Page ${index + 1}`}
                 className="manga-page-image"
                 style={{
-                  width: '100%',
-                  maxWidth: '700px',
+                  width: 'auto',
+                  maxWidth: '600px',
                   height: 'auto',
                   objectFit: 'contain',
                   display: 'block',
