@@ -20,8 +20,8 @@ const AdSense = ({ adSlot, adFormat = 'auto', style = {} }) => {
     const isAdInitialized = (insElement) => {
       if (!insElement) return false;
       // Check if the ins element already has ads initialized
-      return insElement.hasAttribute('data-adsbygoogle-status') && 
-             insElement.getAttribute('data-adsbygoogle-status') === 'done';
+      const status = insElement.getAttribute('data-adsbygoogle-status');
+      return status === 'done' || status === 'filled';
     };
 
     // Function to push ad
@@ -45,7 +45,13 @@ const AdSense = ({ adSlot, adFormat = 'auto', style = {} }) => {
           }
         }
       } catch (e) {
-        console.error('AdSense error:', e);
+        // Ignore "already have ads" error - means ad is already initialized
+        if (e.message && (e.message.includes('already have ads') || e.message.includes('All \'ins\' elements'))) {
+          console.log('AdSense: Ad already initialized (ignoring duplicate push)');
+          adLoaded.current = true;
+        } else {
+          console.error('AdSense error:', e);
+        }
       }
     };
 
