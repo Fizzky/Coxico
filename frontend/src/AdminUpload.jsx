@@ -447,7 +447,15 @@ const AdminUpload = () => {
       if (skipped.length > 0) {
         setMessage(`⚠️ Uploaded with ${skipped.length} duplicate chapter(s) skipped: ${skipped.join(', ')}`);
       } else {
-        setMessage('✅ Volumes added successfully!');
+        setMessage('✅ Volumes added successfully! Redirecting to homepage...');
+        setTimeout(() => {
+          try {
+            navigate('/', { replace: true });
+          } catch (navError) {
+            console.error('Navigation error:', navError);
+            window.location.href = '/';
+          }
+        }, 2000);
       }
     } else {
       // CREATE NEW MANGA - EXISTING CODE
@@ -486,12 +494,19 @@ const AdminUpload = () => {
       
       console.log('Response from server:', response.data);
       
-      if (response.data.success) {
+      // Check for success - handle both response.data.success and status 200/201
+      if (response.data.success || response.status === 200 || response.status === 201) {
         setMessage('✅ Manga created successfully! Redirecting to homepage...');
         
         // Wait a moment to show success message, then redirect
         setTimeout(() => {
-          navigate('/');
+          try {
+            navigate('/', { replace: true });
+          } catch (navError) {
+            console.error('Navigation error:', navError);
+            // Fallback: use window.location if navigate fails
+            window.location.href = '/';
+          }
         }, 2000);
       } else {
         setMessage(`❌ Error: ${response.data.error || 'Failed to save manga'}`);
