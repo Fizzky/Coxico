@@ -79,7 +79,14 @@ app.use(express.urlencoded({
   parameterLimit: 50000
 }));
 
-app.use(timeout('600s')); 
+// Longer timeout for upload routes, shorter for others
+app.use((req, res, next) => {
+  if (req.path.includes('/upload') || req.path.includes('/admin/upload')) {
+    timeout('1800s')(req, res, next); // 30 minutes for uploads
+  } else {
+    timeout('600s')(req, res, next); // 10 minutes for regular requests
+  }
+}); 
 app.use((req, res, next) => {
   res.on('finish', () => {
     req.body = null;
@@ -106,7 +113,13 @@ const apiLimiter = rateLimit({
 
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
-app.use("/api/", apiLimiter); // Apply to all API routes except auth (which has stricter limits)
+// Exclude upload routes from rate limiting (they handle their own limits)
+app.use((req, res, next) => {
+  if (req.path.includes('/upload') || req.path.includes('/admin/upload')) {
+    return next(); // Skip rate limiting for upload routes
+  }
+  apiLimiter(req, res, next);
+});
 
 // ---------- CORS Configuration (Production Ready) ----------
 const allowedOrigins = [

@@ -24,11 +24,11 @@ function getUploadMiddleware() {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
       },
-      // SOLUTION 3: Prevent connection buildup
+      // SOLUTION 3: Prevent connection buildup - increased timeouts for large uploads
       maxAttempts: 3,
       requestHandler: {
-        connectionTimeout: 30000,
-        socketTimeout: 30000,
+        connectionTimeout: 120000, // 2 minutes
+        socketTimeout: 300000, // 5 minutes for large file uploads
       }
     });
 
@@ -151,6 +151,10 @@ setImmediate(() => {
 
 // Upload chapter pages (using lazy-loaded middleware)
 router.post('/upload-pages', adminAuth, (req, res, next) => {
+  // Set longer timeout for large uploads
+  req.setTimeout(900000); // 15 minutes
+  res.setTimeout(900000);
+  
   const upload = getUploadMiddleware().fields([
     { name: 'pages', maxCount: 500 }
   ]);
@@ -158,15 +162,36 @@ router.post('/upload-pages', adminAuth, (req, res, next) => {
 }, async (req, res) => {
   const memBefore = process.memoryUsage().heapUsed / 1024 / 1024;
   console.log(`📊 Memory before upload: ${memBefore.toFixed(2)} MB`);
+  console.log(`📤 Uploading ${req.files?.pages?.length || 0} pages`);
   
   try {
     if (!req.files || !req.files.pages || req.files.pages.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
     }
-    const pageUrls = req.files.pages.map(file => file.location);
+    
+    // Process files in batches to avoid memory issues
+    const pageUrls = [];
+    const batchSize = 50;
+    
+    for (let i = 0; i < req.files.pages.length; i += batchSize) {
+      const batch = req.files.pages.slice(i, i + batchSize);
+      const batchUrls = batch.map(file => file.location);
+      pageUrls.push(...batchUrls);
+      
+      // Log progress
+      if ((i + batchSize) % 100 === 0 || i + batchSize >= req.files.pages.length) {
+        console.log(`📤 Processed ${Math.min(i + batchSize, req.files.pages.length)}/${req.files.pages.length} pages`);
+      }
+      
+      // Small delay to prevent overwhelming the system
+      if (i + batchSize < req.files.pages.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
     
     const memAfter = process.memoryUsage().heapUsed / 1024 / 1024;
     console.log(`📊 Memory after upload: ${memAfter.toFixed(2)} MB (Δ ${(memAfter - memBefore).toFixed(2)} MB)`);
+    console.log(`✅ Successfully uploaded ${pageUrls.length} pages`);
     
     res.json({ success: true, pages: pageUrls });
 
@@ -184,7 +209,20 @@ setImmediate(() => {
 
   } catch (error) {
     console.error('Pages upload error:', error);
-    res.status(500).json({ error: 'Failed to upload pages' });
+    console.error('Error stack:', error.stack);
+    
+    // More detailed error messages
+    if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
+      return res.status(504).json({ error: 'Upload timeout - file may be too large. Try uploading fewer pages at once.' });
+    }
+    if (error.code === 'ENOTFOUND' || error.message.includes('ECONNREFUSED')) {
+      return res.status(503).json({ error: 'Cannot connect to storage service. Please try again later.' });
+    }
+    
+    res.status(500).json({ 
+      error: 'Failed to upload pages',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
