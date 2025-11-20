@@ -17,6 +17,7 @@ import ReadingHistory from './pages/ReadingHistory';
 import ImprovedProfilePage from './pages/ImprovedProfilePage';
 import EditProfilePage from './pages/EditProfilePage';
 import FeedbackModal from './components/FeedbackModal';
+import AdSense from './components/AdSense';
 import logoImage from './assets/logo.png';
 
 // Use environment variable for API URL, fallback to localhost for development
@@ -1752,74 +1753,127 @@ const ChapterReaderPage = () => {
         </div>
       </div>
 
-      {/* Vertical Scrollable Reader Content */}
+      {/* Reader Container with Ads */}
       <div 
-        ref={scrollContainerRef}
-        className="manga-reader-container"
         style={{
           position: 'absolute',
           top: '120px',
           left: '0',
           right: '0',
           bottom: '80px',
-          padding: '10px 0',
-          overflowY: 'auto',
-          overflowX: 'hidden',
           display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '0',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
           backgroundColor: '#000000',
-          background: '#000000',
-          WebkitOverflowScrolling: 'touch'
+          overflow: 'hidden'
         }}
       >
-        {data.chapter.pages && data.chapter.pages.length > 0 ? (
-          data.chapter.pages.map((pageUrl, index) => (
-            <div
-              key={index}
-              ref={(el) => {
-                if (el) {
-                  pageRefs.current[index] = el;
-                }
-              }}
-              style={{
-                width: '100%',
-                maxWidth: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'flex-start',
-                marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '4px',
-                padding: '0'
-              }}
-            >
-              <img
-                src={pageUrl}
-                alt={`Page ${index + 1}`}
-                className="manga-page-image"
+        {/* Left Ad - Desktop Only */}
+        <div 
+          className="hidden lg:block"
+          style={{
+            position: 'sticky',
+            top: '20px',
+            width: '160px',
+            minHeight: '600px',
+            marginRight: '20px',
+            alignSelf: 'flex-start',
+            paddingTop: '20px'
+          }}
+        >
+          <AdSense 
+            adSlot={process.env.VITE_ADSENSE_LEFT_SLOT || '1234567890'}
+            adFormat="vertical"
+            style={{ position: 'sticky', top: '20px' }}
+          />
+        </div>
+
+        {/* Vertical Scrollable Reader Content */}
+        <div 
+          ref={scrollContainerRef}
+          className="manga-reader-container"
+          style={{
+            flex: '1',
+            maxWidth: '550px',
+            padding: '10px 0',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0',
+            backgroundColor: '#000000',
+            background: '#000000',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
+          {data.chapter.pages && data.chapter.pages.length > 0 ? (
+            data.chapter.pages.map((pageUrl, index) => (
+              <div
+                key={index}
+                ref={(el) => {
+                  if (el) {
+                    pageRefs.current[index] = el;
+                  }
+                }}
                 style={{
-                  width: 'auto',
-                  maxWidth: '550px',
-                  height: 'auto',
-                  objectFit: 'contain',
-                  display: 'block',
-                  margin: '0 auto'
+                  width: '100%',
+                  maxWidth: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  marginBottom: index === data.chapter.pages.length - 1 ? '20px' : '4px',
+                  padding: '0'
                 }}
-                onError={(e) => {
-                  console.error(`Failed to load page ${index + 1}:`, pageUrl);
-                  e.target.style.display = 'none';
-                }}
-                onLoad={() => {
-                  console.log(`Page ${index + 1} loaded successfully`);
-                }}
-              />
+              >
+                <img
+                  src={pageUrl}
+                  alt={`Page ${index + 1}`}
+                  className="manga-page-image"
+                  style={{
+                    width: 'auto',
+                    maxWidth: '550px',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    display: 'block',
+                    margin: '0 auto'
+                  }}
+                  onError={(e) => {
+                    console.error(`Failed to load page ${index + 1}:`, pageUrl);
+                    e.target.style.display = 'none';
+                  }}
+                  onLoad={() => {
+                    console.log(`Page ${index + 1} loaded successfully`);
+                  }}
+                />
+              </div>
+            ))
+          ) : (
+            <div className="text-white text-center p-8">
+              <p>No pages available</p>
             </div>
-          ))
-        ) : (
-          <div className="text-white text-center p-8">
-            <p>No pages available</p>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Right Ad - Desktop Only */}
+        <div 
+          className="hidden lg:block"
+          style={{
+            position: 'sticky',
+            top: '20px',
+            width: '160px',
+            minHeight: '600px',
+            marginLeft: '20px',
+            alignSelf: 'flex-start',
+            paddingTop: '20px'
+          }}
+        >
+          <AdSense 
+            adSlot={process.env.VITE_ADSENSE_RIGHT_SLOT || '0987654321'}
+            adFormat="vertical"
+            style={{ position: 'sticky', top: '20px' }}
+          />
+        </div>
       </div>
 
       {/* Bottom Navigation Controls */}

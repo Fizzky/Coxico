@@ -20,6 +20,24 @@ html:has(.manga-page-image) {
   background: #000 !important;
 }
 
+/* AdSense Container Styles */
+.adsense-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.adsense-container ins {
+  background: transparent;
+}
+
+/* Hide ads on mobile devices */
+@media (max-width: 1024px) {
+  .adsense-container {
+    display: none !important;
+  }
+}
+
 /* When the search overlay is open, lock page scroll */
 body.search-open { overflow: hidden; }
 
