@@ -82,11 +82,15 @@ app.use(express.urlencoded({
 // Longer timeout for upload routes, shorter for others
 app.use((req, res, next) => {
   if (req.path.includes('/upload') || req.path.includes('/admin/upload')) {
-    timeout('1800s')(req, res, next); // 30 minutes for uploads
+    req.setTimeout(1800000); // 30 minutes for uploads
+    res.setTimeout(1800000);
   } else {
-    timeout('600s')(req, res, next); // 10 minutes for regular requests
+    req.setTimeout(600000); // 10 minutes for regular requests
+    res.setTimeout(600000);
   }
-}); 
+  next();
+});
+app.use(timeout('1800s')); // Max timeout for all routes 
 app.use((req, res, next) => {
   res.on('finish', () => {
     req.body = null;
