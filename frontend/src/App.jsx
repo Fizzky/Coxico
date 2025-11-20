@@ -1265,8 +1265,8 @@ const MangaDetailPage = () => {
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-4 text-sm text-white/80">
-              <div><span className="text-white/60">Author:</span> Unknown Author</div>
-<div><span className="text-white/60">Artist:</span> Unknown Artist</div>
+              <div><span className="text-white/60">Author:</span> {manga.author || 'Unknown Author'}</div>
+              <div><span className="text-white/60">Artist:</span> {manga.artist || 'Unknown Artist'}</div>
 <div>
   <StarRating mangaId={manga._id} currentUser={user} />
 </div>
