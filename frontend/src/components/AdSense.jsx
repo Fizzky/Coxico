@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 const AdSense = ({ adSlot, adFormat = 'auto', style = {} }) => {
   const adRef = useRef(null);
   const adLoaded = useRef(false);
+  const insElementRef = useRef(null);
 
   useEffect(() => {
     // Check if we have valid ad slot
@@ -15,13 +16,33 @@ const AdSense = ({ adSlot, adFormat = 'auto', style = {} }) => {
     // Check if already loaded
     if (adLoaded.current) return;
 
+    // Function to check if ad is already initialized
+    const isAdInitialized = (insElement) => {
+      if (!insElement) return false;
+      // Check if the ins element already has ads initialized
+      return insElement.hasAttribute('data-adsbygoogle-status') && 
+             insElement.getAttribute('data-adsbygoogle-status') === 'done';
+    };
+
     // Function to push ad
     const pushAd = () => {
       try {
-        if (window.adsbygoogle && adRef.current && !adLoaded.current) {
-          console.log('AdSense: Pushing ad for slot:', adSlot);
-          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        const insElement = adRef.current?.querySelector('.adsbygoogle');
+        
+        // Check if ad is already initialized
+        if (insElement && isAdInitialized(insElement)) {
+          console.log('AdSense: Ad already initialized for slot:', adSlot);
           adLoaded.current = true;
+          return;
+        }
+
+        if (window.adsbygoogle && adRef.current && insElement && !adLoaded.current) {
+          // Check if this specific ins element already has ads
+          if (!isAdInitialized(insElement)) {
+            console.log('AdSense: Pushing ad for slot:', adSlot);
+            (window.adsbygoogle = window.adsbygoogle || []).push({});
+            adLoaded.current = true;
+          }
         }
       } catch (e) {
         console.error('AdSense error:', e);
@@ -30,8 +51,12 @@ const AdSense = ({ adSlot, adFormat = 'auto', style = {} }) => {
 
     // Check if adsbygoogle script is loaded
     if (window.adsbygoogle) {
-      // Small delay to ensure DOM is ready
-      setTimeout(pushAd, 100);
+      // Wait for DOM to be ready
+      const timer = setTimeout(() => {
+        pushAd();
+      }, 500);
+      
+      return () => clearTimeout(timer);
     } else {
       // Wait for adsbygoogle to be available
       const checkAds = setInterval(() => {
@@ -42,12 +67,17 @@ const AdSense = ({ adSlot, adFormat = 'auto', style = {} }) => {
       }, 100);
 
       // Cleanup after 10 seconds
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         clearInterval(checkAds);
         if (!adLoaded.current) {
           console.warn('AdSense: Script not loaded. Check if AdSense script is in index.html');
         }
       }, 10000);
+
+      return () => {
+        clearInterval(checkAds);
+        clearTimeout(timeout);
+      };
     }
   }, [adSlot]);
 
