@@ -60,7 +60,7 @@ export const sendPasswordResetEmail = async (toEmail, resetToken) => {
             <body>
               <div class="container">
                 <div class="header">
-                  <h1>MANGAREAD</h1>
+                  <h1></h1>
                 </div>
                 <div class="content">
                   <h2>Password Reset Request</h2>
