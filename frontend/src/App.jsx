@@ -739,28 +739,75 @@ const HomePage = () => {
           <button className="slider-button prev" onClick={prev}>‹</button>
           <div className="slider-mask">
             <div className="slider" ref={sliderRef}>
-              {items.map((m) => (
-  <Link key={m._id} to={`/manga/${m._id}`} className="manga-tile">
-    <div className="tile-inner">
-      <img
-        src={m.coverImage || 'https://via.placeholder.com/300x450/2a2a2a/ffffff?text=Manga'}
-        alt={m.title}
-        className="tile-image"
-      />
-      <div className="tile-hover">
-        <h3 className="tile-title">{m.title}</h3>
-        <div className="tile-meta">
-          <span className="tile-match">{Math.round(((m.rating || 0) * 10))}% Match</span>
-          <span>{m.status || '—'}</span>
-        </div>
-        <div className="tile-actions">
-          <button className="action-btn" title="Read">▶</button>
-          <button className="action-btn" title="More">ℹ</button>
-        </div>
-      </div>
-    </div>
-  </Link>
-))}
+              {items.map((m) => {
+                const getStatusStyle = (status) => {
+                  switch(status?.toLowerCase()) {
+                    case 'ongoing':
+                      return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Blue
+                    case 'completed':
+                      return { backgroundColor: '#10b981', color: '#ffffff' }; // Green
+                    case 'hiatus':
+                      return { backgroundColor: '#f59e0b', color: '#ffffff' }; // Orange/Yellow
+                    default:
+                      return { backgroundColor: '#6b7280', color: '#ffffff' }; // Gray
+                  }
+                };
+                const statusText = m.status ? m.status.charAt(0).toUpperCase() + m.status.slice(1) : 'Unknown';
+                
+                return (
+                  <Link key={m._id} to={`/manga/${m._id}`} className="manga-tile">
+                    <div className="tile-inner">
+                      <img
+                        src={m.coverImage || 'https://via.placeholder.com/300x450/2a2a2a/ffffff?text=Manga'}
+                        alt={m.title}
+                        className="tile-image"
+                      />
+                      {/* Status Badge */}
+                      {m.status && (
+                        <div 
+                          className="tile-status-badge"
+                          style={{
+                            position: 'absolute',
+                            top: '8px',
+                            left: '8px',
+                            padding: '4px 12px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            textTransform: 'capitalize',
+                            zIndex: 10,
+                            ...getStatusStyle(m.status)
+                          }}
+                        >
+                          {statusText}
+                        </div>
+                      )}
+                      <div className="tile-hover">
+                        <h3 className="tile-title">{m.title}</h3>
+                        <div className="tile-meta">
+                          <span className="tile-match">{Math.round(((m.rating || 0) * 10))}% Match</span>
+                          <span 
+                            style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              textTransform: 'capitalize',
+                              ...getStatusStyle(m.status)
+                            }}
+                          >
+                            {statusText}
+                          </span>
+                        </div>
+                        <div className="tile-actions">
+                          <button className="action-btn" title="Read">▶</button>
+                          <button className="action-btn" title="More">ℹ</button>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
           <button className="slider-button next" onClick={next}>›</button>
@@ -974,7 +1021,35 @@ const HomePage = () => {
         <div className="billboard-metadata">
           <span className="match-score">{Math.round(((featuredManga?.rating || 0) * 10))}% Match</span>
           <span>{(featuredManga?.views || 0).toLocaleString()} views</span>
-          <span>{featuredManga?.status || '—'}</span>
+          {featuredManga?.status && (() => {
+            const getStatusStyle = (status) => {
+              switch(status?.toLowerCase()) {
+                case 'ongoing':
+                  return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Blue
+                case 'completed':
+                  return { backgroundColor: '#10b981', color: '#ffffff' }; // Green
+                case 'hiatus':
+                  return { backgroundColor: '#f59e0b', color: '#ffffff' }; // Orange/Yellow
+                default:
+                  return { backgroundColor: '#6b7280', color: '#ffffff' }; // Gray
+              }
+            };
+            const statusText = featuredManga.status.charAt(0).toUpperCase() + featuredManga.status.slice(1);
+            return (
+              <span 
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  textTransform: 'capitalize',
+                  ...getStatusStyle(featuredManga.status)
+                }}
+              >
+                {statusText}
+              </span>
+            );
+          })()}
         </div>
 
         <div className="billboard-rating-mobile">
