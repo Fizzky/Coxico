@@ -1795,6 +1795,8 @@ const ChapterReaderPage = () => {
           style={{
             flex: '1',
             maxWidth: '550px',
+            height: '100%',
+            minHeight: '0',
             padding: '10px 0',
             overflowY: 'auto',
             overflowX: 'hidden',
