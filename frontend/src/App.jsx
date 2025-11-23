@@ -756,6 +756,11 @@ const HomePage = () => {
                 const statusValue = m.status || 'ongoing';
                 const statusText = statusValue.charAt(0).toUpperCase() + statusValue.slice(1);
                 
+                // Debug: Log status for first few items
+                if (items.indexOf(m) < 3) {
+                  console.log('Manga status:', m.title, 'status:', m.status, 'statusValue:', statusValue, 'statusText:', statusText);
+                }
+                
                 return (
                   <Link key={m._id} to={`/manga/${m._id}`} className="manga-tile">
                     <div className="tile-inner">
@@ -771,12 +776,15 @@ const HomePage = () => {
                           position: 'absolute',
                           top: '8px',
                           left: '8px',
-                          padding: '4px 12px',
-                          borderRadius: '4px',
-                          fontSize: '12px',
-                          fontWeight: '600',
+                          padding: '6px 14px',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '700',
                           textTransform: 'capitalize',
-                          zIndex: 10,
+                          zIndex: 100,
+                          pointerEvents: 'none',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                          whiteSpace: 'nowrap',
                           ...getStatusStyle(m.status)
                         }}
                       >
