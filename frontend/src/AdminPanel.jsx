@@ -1,5 +1,7 @@
 // frontend/src/AdminPanel.jsx
-import React, { useState, useEffect, useContext, createContext } from 'react';
+import React, { useState, useEffect, useContext, createContext, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from './components/AuthContext';
 import { ImageUploader } from './components/ImageUploader.jsx';
 import { 
   Plus, 
@@ -27,6 +29,104 @@ const AdminAuth = ({ children }) => {
   const [admin, setAdmin] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('adminToken'));
   const [loading, setLoading] = useState(true);
+  
+  // Admin session timeout: 30 minutes of inactivity
+  const ADMIN_SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+  const sessionTimeoutRef = useRef(null);
+  const activityTimeoutRef = useRef(null);
+
+  // Update session timestamp on user activity
+  const updateSessionTimestamp = useCallback(() => {
+    if (token && admin) {
+      localStorage.setItem('adminSessionTimestamp', Date.now().toString());
+      // Clear existing timeout
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+      }
+      // Set new timeout
+      setupSessionTimeout();
+    }
+  }, [token, admin]);
+
+  // Setup session timeout
+  const setupSessionTimeout = useCallback(() => {
+    if (!token || !admin) return;
+
+    const sessionTimestamp = localStorage.getItem('adminSessionTimestamp');
+    if (!sessionTimestamp) {
+      localStorage.setItem('adminSessionTimestamp', Date.now().toString());
+      return;
+    }
+
+    const elapsed = Date.now() - parseInt(sessionTimestamp, 10);
+    const remaining = ADMIN_SESSION_TIMEOUT - elapsed;
+
+    // Clear existing timeout
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+
+    // Set logout timeout
+    if (remaining > 0) {
+      sessionTimeoutRef.current = setTimeout(() => {
+        logout();
+        alert('Your admin session has expired due to inactivity. Please login again.');
+      }, remaining);
+    } else {
+      // Session already expired
+      logout();
+      alert('Your admin session has expired. Please login again.');
+    }
+  }, [token, admin]);
+
+  // Track user activity to reset session timeout
+  useEffect(() => {
+    if (!token || !admin) return;
+
+    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+    let activityTimeout;
+
+    const handleActivity = () => {
+      // Debounce activity updates (update max once per minute)
+      clearTimeout(activityTimeout);
+      activityTimeout = setTimeout(() => {
+        updateSessionTimestamp();
+      }, 60000); // Update at most once per minute
+    };
+
+    activityEvents.forEach(event => {
+      window.addEventListener(event, handleActivity, { passive: true });
+    });
+
+    return () => {
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+      clearTimeout(activityTimeout);
+    };
+  }, [token, admin, updateSessionTimestamp]);
+
+  // Check session on mount and when token/admin changes
+  useEffect(() => {
+    if (token && admin) {
+      // Check if session is still valid
+      const sessionTimestamp = localStorage.getItem('adminSessionTimestamp');
+      if (sessionTimestamp) {
+        const elapsed = Date.now() - parseInt(sessionTimestamp, 10);
+        if (elapsed > ADMIN_SESSION_TIMEOUT) {
+          // Session expired, clear everything
+          logout();
+          return;
+        }
+      }
+      setupSessionTimeout();
+    } else {
+      // Clear timeouts if not authenticated
+      if (sessionTimeoutRef.current) {
+        clearTimeout(sessionTimeoutRef.current);
+      }
+    }
+  }, [token, admin, setupSessionTimeout]);
 
   useEffect(() => {
   if (token) {
@@ -46,6 +146,7 @@ const AdminAuth = ({ children }) => {
       const { token: newToken, user } = response.data;
       
       localStorage.setItem('adminToken', newToken);
+      localStorage.setItem('adminSessionTimestamp', Date.now().toString());
       setToken(newToken);
       setAdmin(user);
       axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
@@ -61,8 +162,18 @@ const AdminAuth = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminSessionTimestamp');
     setToken(null);
     setAdmin(null);
+    
+    // Clear session timeouts
+    if (sessionTimeoutRef.current) {
+      clearTimeout(sessionTimeoutRef.current);
+    }
+    if (activityTimeoutRef.current) {
+      clearTimeout(activityTimeoutRef.current);
+    }
+    
     delete axios.defaults.headers.common['Authorization'];
   };
 
@@ -1575,11 +1686,39 @@ const AdminPanel = () => {
 
 const AdminApp = () => {
   const { admin, loading } = useContext(AdminAuthContext);
+  const { user: regularUser } = useAuth();
+  const navigate = useNavigate();
+
+  // If a regular user (not admin) tries to access admin, show 404
+  useEffect(() => {
+    if (!loading && regularUser && regularUser.role !== 'admin' && !admin) {
+      // Redirect regular users away from admin page
+      navigate('/', { replace: true });
+    }
+  }, [loading, regularUser, admin, navigate]);
 
   if (loading) {
     return (
       <div className="fixed inset-0 min-h-screen bg-[#141414] flex items-center justify-center z-[9999]">
         <div className="animate-spin rounded-full h-8 w-8 border-4 border-[#e50914] border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // If regular user (not admin) is logged in, show 404 instead of login
+  if (regularUser && regularUser.role !== 'admin' && !admin) {
+    return (
+      <div className="fixed inset-0 min-h-screen bg-[#141414] flex items-center justify-center z-[9999]">
+        <div className="text-center">
+          <h1 className="text-6xl font-bold text-white mb-4">404</h1>
+          <p className="text-gray-400 text-xl mb-8">Page not found</p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-3 bg-[#e50914] text-white rounded-lg hover:bg-[#f40612] transition-colors"
+          >
+            Go to Homepage
+          </button>
+        </div>
       </div>
     );
   }
