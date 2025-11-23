@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://coxico.xyz/sitemap.xml
+
+# Disallow admin pages
+Disallow: /admin
+Disallow: /admin/
+
+# Allow important pages
+Allow: /
+Allow: /browse
+Allow: /popular
+Allow: /latest
+Allow: /search
+

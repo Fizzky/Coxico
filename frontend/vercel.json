@@ -6,7 +6,7 @@
   "installCommand": "npm install",
   "rewrites": [
     {
-      "source": "/((?!ads\\.txt|logo\\.png|old_logo\\.png|assets/|favicon\\.ico).*)",
+      "source": "/((?!ads\\.txt|robots\\.txt|sitemap\\.xml|logo\\.png|old_logo\\.png|assets/|favicon\\.ico|favicon\\.png).*)",
       "destination": "/index.html"
     }
   ],
@@ -26,6 +26,32 @@
         {
           "key": "Content-Type",
           "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
         },
         {
           "key": "Cache-Control",
