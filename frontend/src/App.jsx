@@ -1312,7 +1312,7 @@ const MangaDetailPage = () => {
   ))}
 </div>
 
-<div className="billboard-buttons">
+<div className="billboard-buttons" style={{ gap: '16px' }}>
   {firstChapter && (
     <button 
   onClick={async () => {
