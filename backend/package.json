@@ -20,7 +20,7 @@
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.1.0",
     "express-validator": "^7.2.1",
-    "validator": "^13.13.0",
+    "validator": "13.7.0",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
     "jsonwebtoken": "^9.0.2",
