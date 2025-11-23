@@ -641,6 +641,145 @@ const getTimeAgo = (date) => {
   return `${Math.floor(seconds / 2592000)}mo ago`;
 };
 
+// ---------------------- Personalized Match Score Calculator ----------------------
+const calculateMatchScore = (manga, userPreferences, allMangaList = []) => {
+  const { favorites = [], continueReading = [], readingHistory = [], isAuthenticated = false } = userPreferences;
+  
+  // If user is not logged in, return rating-based score (current behavior)
+  if (!isAuthenticated) {
+    return Math.round((manga.rating || 0) * 10);
+  }
+  
+  let matchScore = 0;
+  const mangaId = manga._id?.toString() || manga._id;
+  
+  // Helper to get manga ID from various formats
+  const getMangaId = (item) => {
+    if (typeof item === 'string') return item;
+    return item?._id?.toString() || item?._id || item?.manga?._id?.toString() || item?.manga?._id || item?.manga;
+  };
+  
+  // Check if manga is in favorites (high match - 85-95%)
+  const isInFavorites = favorites.some(fav => getMangaId(fav) === mangaId);
+  if (isInFavorites) {
+    matchScore += 88; // High base score for favorites
+  }
+  
+  // Check if manga is in continue reading (high match - 75-85%)
+  const isInContinueReading = continueReading.some(entry => getMangaId(entry) === mangaId);
+  if (isInContinueReading && !isInFavorites) {
+    matchScore += 78; // High score for continue reading
+  }
+  
+  // Check if manga is in reading history (medium match - 60-75%)
+  const isInHistory = readingHistory.some(entry => getMangaId(entry) === mangaId);
+  if (isInHistory && !isInFavorites && !isInContinueReading) {
+    matchScore += 65; // Medium-high score for reading history
+  }
+  
+  // If already in user's lists, add rating boost and return
+  if (isInFavorites || isInContinueReading || isInHistory) {
+    matchScore += Math.min((manga.rating || 0) * 2, 12);
+    return Math.min(Math.round(matchScore), 100);
+  }
+  
+  // If user has no preferences, return rating-based score
+  if (favorites.length === 0 && continueReading.length === 0 && readingHistory.length === 0) {
+    return Math.round((manga.rating || 0) * 10);
+  }
+  
+  // Collect all user-preferred manga IDs
+  const userMangaIds = new Set();
+  favorites.forEach(fav => {
+    const id = getMangaId(fav);
+    if (id) userMangaIds.add(id);
+  });
+  continueReading.forEach(entry => {
+    const id = getMangaId(entry);
+    if (id) userMangaIds.add(id);
+  });
+  readingHistory.forEach(entry => {
+    const id = getMangaId(entry);
+    if (id) userMangaIds.add(id);
+  });
+  
+  // Get genres from user's preferred manga (from allMangaList if available)
+  const genreFrequency = new Map();
+  
+  // Extract genres from favorites, continueReading, and readingHistory
+  // Try to get full manga data from allMangaList first
+  userMangaIds.forEach(id => {
+    const fullManga = allMangaList.find(m => getMangaId(m) === id);
+    if (fullManga?.genres) {
+      fullManga.genres.forEach(genre => {
+        genreFrequency.set(genre, (genreFrequency.get(genre) || 0) + 1);
+      });
+    }
+  });
+  
+  // Also try to get genres directly from favorites/continueReading/readingHistory objects
+  favorites.forEach(fav => {
+    const genres = fav.genres || fav.manga?.genres;
+    if (Array.isArray(genres)) {
+      genres.forEach(genre => {
+        genreFrequency.set(genre, (genreFrequency.get(genre) || 0) + 1);
+      });
+    }
+  });
+  
+  continueReading.forEach(entry => {
+    const genres = entry.manga?.genres || entry.genres;
+    if (Array.isArray(genres)) {
+      genres.forEach(genre => {
+        genreFrequency.set(genre, (genreFrequency.get(genre) || 0) + 1);
+      });
+    }
+  });
+  
+  readingHistory.forEach(entry => {
+    const genres = entry.manga?.genres || entry.genres;
+    if (Array.isArray(genres)) {
+      genres.forEach(genre => {
+        genreFrequency.set(genre, (genreFrequency.get(genre) || 0) + 1);
+      });
+    }
+  });
+  
+  // Calculate genre match score
+  const mangaGenres = manga.genres || [];
+  let genreMatchScore = 0;
+  let matchedGenres = 0;
+  
+  mangaGenres.forEach(genre => {
+    const frequency = genreFrequency.get(genre) || 0;
+    if (frequency > 0) {
+      matchedGenres++;
+      // More frequent genres = higher score (max 25 points per genre)
+      genreMatchScore += Math.min(frequency * 12, 25);
+    }
+  });
+  
+  // Base score from genre matches
+  matchScore += genreMatchScore;
+  
+  // Boost for multiple genre matches
+  if (matchedGenres >= 2) {
+    matchScore += 8;
+  }
+  if (matchedGenres >= 3) {
+    matchScore += 5;
+  }
+  
+  // Add rating boost (moderate for new manga)
+  matchScore += (manga.rating || 0) * 4;
+  
+  // Add popularity boost (small)
+  matchScore += Math.min(Math.log10((manga.views || 0) + 1) * 1.5, 4);
+  
+  // Normalize to 0-100% (ensure minimum of 0)
+  return Math.max(0, Math.min(Math.round(matchScore), 100));
+};
+
 // ---------------------- Home (billboard + rows) ----------------------
 const HomePage = () => {
   const { user, favorites, continueReading, fetchReadingHistory, isAuthenticated } = useAuth();
@@ -727,6 +866,14 @@ const HomePage = () => {
     }, [offset]);
 
     if (!items || items.length === 0) return null;
+    
+    // Calculate match scores for all items
+    const userPreferences = {
+      favorites,
+      continueReading,
+      readingHistory,
+      isAuthenticated: isAuthenticated()
+    };
 
     return (
       <div className="content-row">
@@ -767,7 +914,7 @@ const HomePage = () => {
                       <div className="tile-hover">
                         <h3 className="tile-title">{m.title}</h3>
                         <div className="tile-meta">
-                          <span className="tile-match">{Math.round(((m.rating || 0) * 10))}% Match</span>
+                          <span className="tile-match">{calculateMatchScore(m, userPreferences, manga)}% Match</span>
                           <span 
                             style={{
                               padding: '2px 8px',
@@ -1001,7 +1148,7 @@ const HomePage = () => {
             : 'Discover and read amazing manga stories.'}
         </p>
         <div className="billboard-metadata">
-          <span className="match-score">{Math.round(((featuredManga?.rating || 0) * 10))}% Match</span>
+          <span className="match-score">{featuredManga ? calculateMatchScore(featuredManga, { favorites, continueReading, readingHistory, isAuthenticated: isAuthenticated() }, manga) : 0}% Match</span>
           <span>{(featuredManga?.views || 0).toLocaleString()} views</span>
           {(() => {
             const getStatusStyle = (status) => {
@@ -1186,7 +1333,8 @@ const StarRating = ({ mangaId, currentUser }) => {
 const MangaDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, isFavorite, toggleFavorite } = useAuth();
+  const { user, isAuthenticated, isFavorite, toggleFavorite, favorites, continueReading, fetchReadingHistory } = useAuth();
+  const [readingHistory, setReadingHistory] = useState([]);
 
   const [manga, setManga] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -1194,6 +1342,17 @@ const MangaDetailPage = () => {
   const [favLoading, setFavLoading] = useState(false);
   const hasFetched = useRef(false);
   
+  // Fetch reading history
+  useEffect(() => {
+    if (isAuthenticated() && fetchReadingHistory) {
+      fetchReadingHistory(1, 'all').then(({ history }) => {
+        setReadingHistory(history || []);
+      });
+    } else {
+      setReadingHistory([]);
+    }
+  }, [isAuthenticated, fetchReadingHistory, id]);
+
   useEffect(() => {
   // Prevent double-fetch in React Strict Mode
   if (hasFetched.current) return;
@@ -1271,7 +1430,7 @@ const MangaDetailPage = () => {
           </p>
 
           <div className="billboard-metadata">
-            <span className="match-score">{Math.round((manga.rating || 0) * 10)}% Match</span>
+            <span className="match-score">{manga ? calculateMatchScore(manga, { favorites, continueReading, readingHistory, isAuthenticated: isAuthenticated() }, [manga]) : 0}% Match</span>
             <span>{(manga.views || 0).toLocaleString()} views</span>
             {(() => {
               const getStatusStyle = (status) => {
