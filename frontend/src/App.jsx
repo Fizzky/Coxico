@@ -1518,30 +1518,33 @@ const ChapterReaderPage = () => {
     };
   }, [data, currentPage, isAuthenticated, mangaId, updateReadingProgress, startTime, lastProgressUpdate]);
 
-  // Keyboard navigation - scroll to next/prev page
+  // Keyboard navigation - only for left/right arrows, allow normal scrolling for up/down
   useEffect(() => {
     if (!data || !data.chapter) return;
     
     const handleKeyPress = (e) => {
-      const currentIndex = data.allChapters ? findChapterIndex(data.allChapters, chapterNumber) : -1;
-      const isFirst = !data.allChapters || currentIndex <= 0;
-      const isLast = !data.allChapters || currentIndex === data.allChapters.length - 1;
-      
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      // Only handle left/right arrows for page navigation
+      // Allow up/down arrows to scroll normally
+      if (e.key === 'ArrowLeft') {
         e.preventDefault();
+        const currentIndex = data.allChapters ? findChapterIndex(data.allChapters, chapterNumber) : -1;
+        const isFirst = !data.allChapters || currentIndex <= 0;
         if (currentPage > 0 && pageRefs.current[currentPage - 1]) {
           pageRefs.current[currentPage - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else if (!isFirst) {
           prevChapterToLastPage();
         }
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      } else if (e.key === 'ArrowRight') {
         e.preventDefault();
+        const currentIndex = data.allChapters ? findChapterIndex(data.allChapters, chapterNumber) : -1;
+        const isLast = !data.allChapters || currentIndex === data.allChapters.length - 1;
         if (currentPage < data.chapter.pages.length - 1 && pageRefs.current[currentPage + 1]) {
           pageRefs.current[currentPage + 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else if (!isLast) {
           nextChapter();
         }
       }
+      // Don't prevent default for ArrowUp/ArrowDown - let them scroll normally
     };
 
     window.addEventListener('keydown', handleKeyPress);
@@ -1631,6 +1634,14 @@ const ChapterReaderPage = () => {
       return () => clearTimeout(timer);
     }
   }, [data, currentPage]);
+
+  // Focus scroll container on mount to enable keyboard scrolling
+  useEffect(() => {
+    if (scrollContainerRef.current && data && data.chapter) {
+      // Focus the container so it can receive keyboard events
+      scrollContainerRef.current.focus();
+    }
+  }, [data]);
 
   // Track scroll position to update currentPage
   useEffect(() => {
@@ -1792,13 +1803,16 @@ const ChapterReaderPage = () => {
         <div 
           ref={scrollContainerRef}
           className="manga-reader-container"
+          tabIndex={0}
           style={{
-            flex: '1',
+            flex: '1 1 0',
             maxWidth: '550px',
+            width: '100%',
             height: '100%',
+            maxHeight: '100%',
             minHeight: '0',
             padding: '10px 0',
-            overflowY: 'auto',
+            overflowY: 'scroll',
             overflowX: 'hidden',
             display: 'flex',
             flexDirection: 'column',
@@ -1806,7 +1820,8 @@ const ChapterReaderPage = () => {
             gap: '0',
             backgroundColor: '#000000',
             background: '#000000',
-            WebkitOverflowScrolling: 'touch'
+            WebkitOverflowScrolling: 'touch',
+            position: 'relative'
           }}
         >
           {data.chapter.pages && data.chapter.pages.length > 0 ? (
