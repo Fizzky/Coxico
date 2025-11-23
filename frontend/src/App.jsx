@@ -1273,7 +1273,37 @@ const MangaDetailPage = () => {
           <div className="billboard-metadata">
             <span className="match-score">{Math.round((manga.rating || 0) * 10)}% Match</span>
             <span>{(manga.views || 0).toLocaleString()} views</span>
-            <span className="capitalize">{manga.status || '—'}</span>
+            {(() => {
+              const getStatusStyle = (status) => {
+                const normalizedStatus = (status || 'ongoing').toLowerCase();
+                switch(normalizedStatus) {
+                  case 'ongoing':
+                    return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Blue
+                  case 'completed':
+                    return { backgroundColor: '#10b981', color: '#ffffff' }; // Green
+                  case 'hiatus':
+                    return { backgroundColor: '#f59e0b', color: '#ffffff' }; // Orange/Yellow
+                  default:
+                    return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Default to blue (ongoing)
+                }
+              };
+              const statusValue = manga.status || 'ongoing';
+              const statusText = statusValue.charAt(0).toUpperCase() + statusValue.slice(1);
+              return (
+                <span 
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    textTransform: 'capitalize',
+                    ...getStatusStyle(manga.status)
+                  }}
+                >
+                  {statusText}
+                </span>
+              );
+            })()}
           </div>
 
           <div className="flex items-center gap-2 mt-3 flex-wrap">
