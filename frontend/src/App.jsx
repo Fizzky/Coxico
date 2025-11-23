@@ -741,7 +741,8 @@ const HomePage = () => {
             <div className="slider" ref={sliderRef}>
               {items.map((m) => {
                 const getStatusStyle = (status) => {
-                  switch(status?.toLowerCase()) {
+                  const normalizedStatus = (status || 'ongoing').toLowerCase();
+                  switch(normalizedStatus) {
                     case 'ongoing':
                       return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Blue
                     case 'completed':
@@ -749,10 +750,11 @@ const HomePage = () => {
                     case 'hiatus':
                       return { backgroundColor: '#f59e0b', color: '#ffffff' }; // Orange/Yellow
                     default:
-                      return { backgroundColor: '#6b7280', color: '#ffffff' }; // Gray
+                      return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Default to blue (ongoing)
                   }
                 };
-                const statusText = m.status ? m.status.charAt(0).toUpperCase() + m.status.slice(1) : 'Unknown';
+                const statusValue = m.status || 'ongoing';
+                const statusText = statusValue.charAt(0).toUpperCase() + statusValue.slice(1);
                 
                 return (
                   <Link key={m._id} to={`/manga/${m._id}`} className="manga-tile">
@@ -762,26 +764,24 @@ const HomePage = () => {
                         alt={m.title}
                         className="tile-image"
                       />
-                      {/* Status Badge */}
-                      {m.status && (
-                        <div 
-                          className="tile-status-badge"
-                          style={{
-                            position: 'absolute',
-                            top: '8px',
-                            left: '8px',
-                            padding: '4px 12px',
-                            borderRadius: '4px',
-                            fontSize: '12px',
-                            fontWeight: '600',
-                            textTransform: 'capitalize',
-                            zIndex: 10,
-                            ...getStatusStyle(m.status)
-                          }}
-                        >
-                          {statusText}
-                        </div>
-                      )}
+                      {/* Status Badge - Always show */}
+                      <div 
+                        className="tile-status-badge"
+                        style={{
+                          position: 'absolute',
+                          top: '8px',
+                          left: '8px',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          textTransform: 'capitalize',
+                          zIndex: 10,
+                          ...getStatusStyle(m.status)
+                        }}
+                      >
+                        {statusText}
+                      </div>
                       <div className="tile-hover">
                         <h3 className="tile-title">{m.title}</h3>
                         <div className="tile-meta">
@@ -1021,9 +1021,10 @@ const HomePage = () => {
         <div className="billboard-metadata">
           <span className="match-score">{Math.round(((featuredManga?.rating || 0) * 10))}% Match</span>
           <span>{(featuredManga?.views || 0).toLocaleString()} views</span>
-          {featuredManga?.status && (() => {
+          {(() => {
             const getStatusStyle = (status) => {
-              switch(status?.toLowerCase()) {
+              const normalizedStatus = (status || 'ongoing').toLowerCase();
+              switch(normalizedStatus) {
                 case 'ongoing':
                   return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Blue
                 case 'completed':
@@ -1031,10 +1032,11 @@ const HomePage = () => {
                 case 'hiatus':
                   return { backgroundColor: '#f59e0b', color: '#ffffff' }; // Orange/Yellow
                 default:
-                  return { backgroundColor: '#6b7280', color: '#ffffff' }; // Gray
+                  return { backgroundColor: '#3b82f6', color: '#ffffff' }; // Default to blue (ongoing)
               }
             };
-            const statusText = featuredManga.status.charAt(0).toUpperCase() + featuredManga.status.slice(1);
+            const statusValue = featuredManga?.status || 'ongoing';
+            const statusText = statusValue.charAt(0).toUpperCase() + statusValue.slice(1);
             return (
               <span 
                 style={{
@@ -1043,7 +1045,7 @@ const HomePage = () => {
                   fontSize: '13px',
                   fontWeight: '600',
                   textTransform: 'capitalize',
-                  ...getStatusStyle(featuredManga.status)
+                  ...getStatusStyle(featuredManga?.status)
                 }}
               >
                 {statusText}
