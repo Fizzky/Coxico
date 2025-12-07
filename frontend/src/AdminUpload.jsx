@@ -21,6 +21,7 @@ const AdminUpload = () => {
   artist: '',
   genres: '',
   status: 'ongoing',
+  type: 'manga',
   hasVolumes: false,
   volumes: []
 });
@@ -467,6 +468,7 @@ const AdminUpload = () => {
         artist: formData.artist,
         genres: formData.genres.split(',').map(g => g.trim()),
         status: formData.status,
+        type: formData.type || 'manga',
         coverImage: coverUrl,
         hasVolumes: formData.hasVolumes || false,
         volumes: formData.volumes || [],
@@ -687,7 +689,7 @@ const AdminUpload = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
                   <div>
                     <label className="block text-sm font-medium mb-2 text-gray-300">
                       Author <span className="text-red-400">*</span>
@@ -726,6 +728,20 @@ const AdminUpload = () => {
                       <option value="ongoing" style={{ backgroundColor: '#333', color: 'white' }}>Ongoing</option>
                       <option value="completed" style={{ backgroundColor: '#333', color: 'white' }}>Completed</option>
                       <option value="hiatus" style={{ backgroundColor: '#333', color: 'white' }}>Hiatus</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">Type</label>
+                    <select
+                      name="type"
+                      value={formData.type}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 bg-[#333] border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#e50914] focus:border-transparent"
+                      style={{ color: 'white', backgroundColor: '#333' }}
+                    >
+                      <option value="manga" style={{ backgroundColor: '#333', color: 'white' }}>Manga</option>
+                      <option value="manhwa" style={{ backgroundColor: '#333', color: 'white' }}>Manhwa</option>
+                      <option value="manhua" style={{ backgroundColor: '#333', color: 'white' }}>Manhua</option>
                     </select>
                   </div>
                 </div>

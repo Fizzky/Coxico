@@ -422,6 +422,7 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       artist,
       genres,
       status,
+      type,
       coverImage,
       chapters,
       volumes  // NEW: Optional volumes array
@@ -492,6 +493,7 @@ router.post('/create-manga', adminAuth, async (req, res) => {
       artist,
       genres,
       status,
+      type: type || 'manga', // Default to 'manga' if not specified
       coverImage,
       rating: 0,
       views: 0,

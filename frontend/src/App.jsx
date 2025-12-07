@@ -2196,6 +2196,7 @@ const BrowsePage = () => {
   const [sortBy, setSortBy] = useState('title_asc');
   const [genreFilter, setGenreFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   // Fetch all manga
 useEffect(() => {
@@ -2240,7 +2241,9 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
       
       const matchesStatus = !statusFilter || m.status === statusFilter;
       
-      return matchesSearch && matchesGenre && matchesStatus;
+      const matchesType = !typeFilter || m.type === typeFilter;
+      
+      return matchesSearch && matchesGenre && matchesStatus && matchesType;
     });
 
     // Sort manga
@@ -2259,7 +2262,7 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
     });
 
     return filtered;
-  }, [manga, searchQuery, sortBy, genreFilter, statusFilter]);
+  }, [manga, searchQuery, sortBy, genreFilter, statusFilter, typeFilter]);
 
   // Get all unique genres
   const allGenres = useMemo(() => {
@@ -2304,7 +2307,7 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
           </div>
 
           {/* Filters Row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {/* Sort By */}
             <select
   value={sortBy}
@@ -2357,6 +2360,22 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
   <option value="hiatus" style={{ backgroundColor: '#333', color: 'white' }}>Hiatus</option>
 </select>
 
+            {/* Type Filter */}
+            <select
+  value={typeFilter}
+  onChange={(e) => setTypeFilter(e.target.value)}
+  className="bg-[#333] border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#e50914]"
+  style={{
+    color: 'white',
+    backgroundColor: '#333'
+  }}
+>
+  <option value="" style={{ backgroundColor: '#333', color: 'white' }}>All Types</option>
+  <option value="manga" style={{ backgroundColor: '#333', color: 'white' }}>Manga</option>
+  <option value="manhwa" style={{ backgroundColor: '#333', color: 'white' }}>Manhwa</option>
+  <option value="manhua" style={{ backgroundColor: '#333', color: 'white' }}>Manhua</option>
+</select>
+
             {/* Clear Filters */}
             <button
               onClick={() => {
@@ -2364,6 +2383,7 @@ const rotationIndex = thirtySecondBlocks % mangaList.length;
                 setSortBy('title_asc');
                 setGenreFilter('');
                 setStatusFilter('');
+                setTypeFilter('');
               }}
               className="bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-4 py-3 text-white transition-colors"
             >

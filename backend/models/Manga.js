@@ -56,6 +56,12 @@ const MangaSchema = new mongoose.Schema({
     default: 'ongoing',
     index: true 
   },
+  type: {
+    type: String,
+    enum: ['manga', 'manhwa', 'manhua'],
+    default: 'manga',
+    index: true
+  },
   coverImage: { 
     type: String, 
     required: true 
