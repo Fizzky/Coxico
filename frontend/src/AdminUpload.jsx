@@ -786,17 +786,37 @@ const AdminUpload = () => {
                   <p className="text-blue-400 text-sm mb-2">
                     <strong>Folder Structure Required:</strong>
                   </p>
-                  <pre className="text-xs text-blue-300 font-mono">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-blue-300 text-xs font-semibold mb-1">With Volumes:</p>
+                      <pre className="text-xs text-blue-300 font-mono">
 {`${uploadMode === 'new' ? 'manga-name/' : 'new-volumes/'}
-${uploadMode === 'new' ? '├── cover.jpg (required)\n' : ''}├── Volume 1/
+${uploadMode === 'new' ? '├── cover.jpg\n' : ''}├── Volume 1/
 │   ├── Chapter 1/
 │   │   ├── 1.jpg
 │   │   └── 2.jpg
 ├── Volume 2/
     └── Chapter 3/`}
-                  </pre>
-                  <p className="text-blue-400 text-xs mt-2">
-                    Supported names: <code>Volume 1</code>, <code>Vol 1</code>, or <code>Chapter 1</code>
+                      </pre>
+                    </div>
+                    <div>
+                      <p className="text-blue-300 text-xs font-semibold mb-1">Flat Structure (No Volumes):</p>
+                      <pre className="text-xs text-blue-300 font-mono">
+{`${uploadMode === 'new' ? 'manga-name/' : 'new-chapters/'}
+${uploadMode === 'new' ? '├── cover.jpg\n' : ''}├── Chapter 1/
+│   ├── 1.jpg
+│   └── 2.jpg
+├── Chapter 2/
+│   └── 1.jpg
+└── 3/  (or "Chapter 3")`}
+                      </pre>
+                    </div>
+                  </div>
+                  <p className="text-blue-400 text-xs mt-3">
+                    Supported names: <code>Volume 1</code>, <code>Vol 1</code>, <code>Chapter 1</code>, or just <code>1</code> (for flat structure)
+                  </p>
+                  <p className="text-blue-300 text-xs mt-1">
+                    Chapter titles are optional - folders like "1", "2", "Chapter 1" work fine!
                   </p>
                 </div>
 
