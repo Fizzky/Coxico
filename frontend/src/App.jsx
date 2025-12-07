@@ -963,7 +963,7 @@ const HomePage = () => {
       }
     : {};
 
-  const latest = [...manga].slice(0, 18);
+  const latest = [...manga].sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0)).slice(0, 18);
   const trending = [...manga].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 18);
   
   // Personalized recommendations based on user preferences
