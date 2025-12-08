@@ -426,9 +426,19 @@ const AdminUpload = () => {
         return;
       }
 
-      const volumesData = formData.hasVolumes && formData.volumes.length > 0
+      // Validate that we have chapters or volumes to add
+      const hasVolumesData = formData.hasVolumes && formData.volumes && formData.volumes.length > 0;
+      const hasChaptersData = chapters && chapters.length > 0 && chapters.some(ch => ch.pages && ch.pages.length > 0);
+
+      if (!hasVolumesData && !hasChaptersData) {
+        setMessage('Error: No chapters or volumes provided. Please upload chapters first.');
+        setUploading(false);
+        return;
+      }
+
+      const volumesData = hasVolumesData
         ? { volumes: formData.volumes }
-        : { chapters: chapters.map(ch => ({
+        : { chapters: chapters.filter(ch => ch.pages && ch.pages.length > 0).map(ch => ({
             chapterNumber: ch.chapterNumber,
             chapterNumberLabel: ch.chapterNumberLabel || (ch.chapterNumber != null ? ch.chapterNumber.toString() : ''),
             title: ch.title,
